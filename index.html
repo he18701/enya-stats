@@ -97,11 +97,9 @@
   const TREND_STATS = [
     { key: "PTS", label: "\u5F97\u70B9", pct: false, lowerBetter: false },
     { key: "EFF", label: "\u52B9\u7387(EFF)", pct: false, lowerBetter: false },
-    { key: "2PM", label: "2P\u6210\u529F", pct: false, lowerBetter: false },
     { key: "2P%", label: "2P\u6210\u529F\u7387", pct: true, lowerBetter: false },
-    { key: "3PM", label: "3P\u6210\u529F", pct: false, lowerBetter: false },
     { key: "3P%", label: "3P\u6210\u529F\u7387", pct: true, lowerBetter: false },
-    { key: "FTM", label: "FT\u6210\u529F", pct: false, lowerBetter: false },
+    { key: "FT%", label: "FT\u6210\u529F\u7387", pct: true, lowerBetter: false },
     { key: "TR", label: "\u30EA\u30D0\u30A6\u30F3\u30C9", pct: false, lowerBetter: false },
     { key: "OR", label: "\u30AA\u30D5\u30A7\u30F3\u30B9\u30EA\u30D0\u30A6\u30F3\u30C9", pct: false, lowerBetter: false },
     { key: "DR", label: "\u30C7\u30A3\u30D5\u30A7\u30F3\u30B9\u30EA\u30D0\u30A6\u30F3\u30C9", pct: false, lowerBetter: false },
@@ -226,13 +224,23 @@
     }
     return v;
   }
-  function parsePct(v) {
-    if (v == null) return null;
-    const m = String(v).match(/-?\d+(\.\d+)?/);
-    return m ? Number(m[0]) : null;
-  }
   function statValue(player, statKey) {
-    if (statKey === "FG%") return parsePct(player["FG%"]);
+    if (statKey === "2P%") {
+      const m = Number(player["2PM"]) || 0, a = Number(player["2PA"]) || 0;
+      return a > 0 ? Math.round(m / a * 100) : null;
+    }
+    if (statKey === "3P%") {
+      const m = Number(player["3PM"]) || 0, a = Number(player["3PA"]) || 0;
+      return a > 0 ? Math.round(m / a * 100) : null;
+    }
+    if (statKey === "FT%") {
+      const m = Number(player["FTM"]) || 0, a = Number(player["FTA"]) || 0;
+      return a > 0 ? Math.round(m / a * 100) : null;
+    }
+    if (statKey === "FG%") {
+      const m = Number(player["FGM"]) || 0, a = Number(player["FGA"]) || 0;
+      return a > 0 ? Math.round(m / a * 100) : null;
+    }
     return Number(player[statKey]) || 0;
   }
   function parseRoster(text) {
@@ -673,7 +681,7 @@
           },
           style: { cursor: mode === "delete" ? "pointer" : "default" }
         },
-        s.made ? /* @__PURE__ */ React.createElement("circle", { cx: s.x, cy: s.y, r: "8", fill: T.them, stroke: "#0E1015", strokeWidth: "1.5" }) : /* @__PURE__ */ React.createElement("g", { stroke: T.down, strokeWidth: "3.4", strokeLinecap: "round" }, /* @__PURE__ */ React.createElement("line", { x1: s.x - 6, y1: s.y - 6, x2: s.x + 6, y2: s.y + 6 }), /* @__PURE__ */ React.createElement("line", { x1: s.x + 6, y1: s.y - 6, x2: s.x - 6, y2: s.y + 6 }))
+        s.made ? /* @__PURE__ */ React.createElement("circle", { cx: s.x, cy: s.y, r: "7", fill: "#3EA6FF99", stroke: "#3EA6FF", strokeWidth: "1.5" }) : /* @__PURE__ */ React.createElement("g", { stroke: "#FF547099", strokeWidth: "2.5", strokeLinecap: "round" }, /* @__PURE__ */ React.createElement("line", { x1: s.x - 5.5, y1: s.y - 5.5, x2: s.x + 5.5, y2: s.y + 5.5 }), /* @__PURE__ */ React.createElement("line", { x1: s.x + 5.5, y1: s.y - 5.5, x2: s.x - 5.5, y2: s.y + 5.5 }))
       ))
     );
   }
@@ -691,7 +699,10 @@
     const a2 = shown.filter((s) => !s.three).length;
     const m3 = shown.filter((s) => s.three && s.made).length;
     const a3 = shown.filter((s) => s.three).length;
-    const pct = (m, a) => a ? Math.round(m / a * 100) + "%" : "-";
+    const pct = (m, a) => a ? Math.round(m / a * 100) + "%" : "-%";
+    const sp = player !== "__ALL__" ? game.ourPlayers.find((p) => p.Name === player) : null;
+    const ftm = sp ? Number(sp.FTM) || 0 : 0;
+    const fta = sp ? Number(sp.FTA) || 0 : 0;
     function tap(x, y) {
       if (mode !== "add") return;
       if (player === "__ALL__") {
@@ -700,6 +711,22 @@
       }
       onAddShot(game.id, player, x, y, made);
     }
+    const statsLeft = [
+      { label: "2FG", value: `${m2}/${a2} - ${pct(m2, a2)}` },
+      { label: "3FG", value: `${m3}/${a3} - ${pct(m3, a3)}` },
+      { label: "FG", value: `${m2 + m3}/${a2 + a3} - ${pct(m2 + m3, a2 + a3)}` },
+      { label: "FT", value: sp ? `${ftm}/${fta} - ${pct(ftm, fta)}` : "-" },
+      { label: "\u5F97\u70B9", value: sp ? Number(sp.PTS) || 0 : m2 * 2 + m3 * 3, highlight: true },
+      { label: "\u30D6\u30ED\u30C3\u30AF", value: sp ? Number(sp.BS) || 0 : "-" }
+    ];
+    const statsRight = [
+      { label: "\u30A2\u30B7\u30B9\u30C8", value: sp ? Number(sp.AS) || 0 : "-" },
+      { label: "\u30B9\u30C6\u30A3\u30FC\u30EB", value: sp ? Number(sp.ST) || 0 : "-" },
+      { label: "\u30AA\u30D5\u30A7\u30F3\u30B9REB", value: sp ? Number(sp.OR) || 0 : "-" },
+      { label: "\u30C7\u30A3\u30D5\u30A7\u30F3\u30B9REB", value: sp ? Number(sp.DR) || 0 : "-" },
+      { label: "\u30BF\u30FC\u30F3\u30AA\u30FC\u30D0\u30FC", value: sp ? Number(sp.TO) || 0 : "-" },
+      { label: "\u30D5\u30A1\u30FC\u30EB", value: sp ? Number(sp.F) || 0 : "-" }
+    ];
     return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: S.pickerRow }, /* @__PURE__ */ React.createElement("label", { style: S.pickLbl }, "\u8A66\u5408"), /* @__PURE__ */ React.createElement("select", { value: game.id, onChange: (e) => onPick(e.target.value), style: S.select }, [...games].reverse().map((g) => /* @__PURE__ */ React.createElement("option", { key: g.id, value: g.id }, g.date, "\u3000vs ", g.opponent)))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" } }, /* @__PURE__ */ React.createElement("div", { style: { flex: "1 1 180px", minWidth: 160, maxWidth: 240 } }, /* @__PURE__ */ React.createElement("div", { style: S.playerListWrap }, /* @__PURE__ */ React.createElement("button", { onClick: () => setPlayer("__ALL__"), style: S.playerRow(player === "__ALL__") }, game.ourTeam, "\uFF08\u5408\u8A08\uFF09"), roster.map((n) => {
       const c = allShots.filter((s) => s.player === n).length;
       return /* @__PURE__ */ React.createElement("button", { key: n, onClick: () => setPlayer(n), style: S.playerRow(player === n) }, /* @__PURE__ */ React.createElement("span", null, n), c > 0 && /* @__PURE__ */ React.createElement("span", { style: { marginLeft: "auto", fontSize: 11, opacity: 0.75, fontFamily: mono } }, c));
@@ -730,7 +757,7 @@
         style: S.toolBtn(mode === "delete", T.gold)
       },
       mode === "delete" ? "\u524A\u9664\u30E2\u30FC\u30C9\u4E2D" : "\u524A\u9664\u30E2\u30FC\u30C9"
-    )), /* @__PURE__ */ React.createElement(CourtSVG, { shots: shown, onTap: tap, onRemove: onRemoveShot, mode }), /* @__PURE__ */ React.createElement("p", { style: { ...S.note, marginTop: 10 } }, mode === "delete" ? "\u30B3\u30FC\u30C8\u4E0A\u306E\u30DE\u30FC\u30AB\u30FC\u3092\u30BF\u30C3\u30D7\u3059\u308B\u3068\u3001\u305D\u306E\u30B7\u30E5\u30FC\u30C8\u3092\u524A\u9664\u3057\u307E\u3059\u3002" : player === "__ALL__" ? "\u5DE6\u306E\u4E00\u89A7\u304B\u3089\u9078\u624B\u3092\u9078\u3076\u3068\u3001\u30B3\u30FC\u30C8\u3092\u30BF\u30C3\u30D7\u3057\u3066\u8A18\u9332\u3067\u304D\u307E\u3059\u3002" : `\u300C${player}\u300D\u306E\u8A18\u9332\u4E2D\uFF1A\u30B3\u30FC\u30C8\u3092\u30BF\u30C3\u30D7\u3059\u308B\u3068${made ? "\u6210\u529F" : "\u5931\u6557"}\u3068\u3057\u30661\u672C\u8FFD\u52A0\u3057\u307E\u3059\u30022P/3P\u306F\u4F4D\u7F6E\u304B\u3089\u81EA\u52D5\u5224\u5B9A\u3057\u307E\u3059\u3002`), /* @__PURE__ */ React.createElement("div", { style: S.shotStats }, /* @__PURE__ */ React.createElement("div", { style: S.ssRow }, /* @__PURE__ */ React.createElement("span", { style: S.ssLbl }, "2FG"), /* @__PURE__ */ React.createElement("span", { style: S.ssVal }, m2, "/", a2), /* @__PURE__ */ React.createElement("span", { style: S.ssPct }, pct(m2, a2))), /* @__PURE__ */ React.createElement("div", { style: S.ssRow }, /* @__PURE__ */ React.createElement("span", { style: S.ssLbl }, "3FG"), /* @__PURE__ */ React.createElement("span", { style: S.ssVal }, m3, "/", a3), /* @__PURE__ */ React.createElement("span", { style: S.ssPct }, pct(m3, a3))), /* @__PURE__ */ React.createElement("div", { style: S.ssRow }, /* @__PURE__ */ React.createElement("span", { style: S.ssLbl }, "FG"), /* @__PURE__ */ React.createElement("span", { style: S.ssVal }, m2 + m3, "/", a2 + a3), /* @__PURE__ */ React.createElement("span", { style: S.ssPct }, pct(m2 + m3, a2 + a3))), /* @__PURE__ */ React.createElement("div", { style: { ...S.ssRow, borderBottom: "none" } }, /* @__PURE__ */ React.createElement("span", { style: S.ssLbl }, "\u30D5\u30A3\u30FC\u30EB\u30C9\u5F97\u70B9"), /* @__PURE__ */ React.createElement("span", { style: { ...S.ssVal, color: T.us, fontWeight: 800 } }, m2 * 2 + m3 * 3), /* @__PURE__ */ React.createElement("span", { style: S.ssPct }))))));
+    )), /* @__PURE__ */ React.createElement("div", { style: { maxWidth: 420 } }, /* @__PURE__ */ React.createElement(CourtSVG, { shots: shown, onTap: tap, onRemove: onRemoveShot, mode })), /* @__PURE__ */ React.createElement("p", { style: { ...S.note, marginTop: 8, fontSize: 12 } }, mode === "delete" ? "\u30B3\u30FC\u30C8\u4E0A\u306E\u30DE\u30FC\u30AB\u30FC\u3092\u30BF\u30C3\u30D7\u3067\u524A\u9664\u3002" : player === "__ALL__" ? "\u9078\u624B\u3092\u9078\u3076\u3068\u30B3\u30FC\u30C8\u3092\u30BF\u30C3\u30D7\u3057\u3066\u8A18\u9332\u3067\u304D\u307E\u3059\u3002" : `\u300C${player}\u300D\u306E\u8A18\u9332\u4E2D\uFF1A\u30BF\u30C3\u30D7\u3067${made ? "\u6210\u529F" : "\u5931\u6557"}\u3092\u8FFD\u52A0\u30022P/3P\u306F\u81EA\u52D5\u5224\u5B9A\u3002`), /* @__PURE__ */ React.createElement("div", { style: S.shotStatsGrid }, /* @__PURE__ */ React.createElement("div", { style: S.shotStatsCol }, statsLeft.map((s) => /* @__PURE__ */ React.createElement("div", { key: s.label, style: S.ssItem }, /* @__PURE__ */ React.createElement("span", { style: S.ssLbl2 }, s.label), /* @__PURE__ */ React.createElement("span", { style: { ...S.ssVal2, color: s.highlight ? T.us : T.text } }, s.value)))), /* @__PURE__ */ React.createElement("div", { style: S.shotStatsCol }, statsRight.map((s) => /* @__PURE__ */ React.createElement("div", { key: s.label, style: S.ssItem }, /* @__PURE__ */ React.createElement("span", { style: S.ssLbl2 }, s.label), /* @__PURE__ */ React.createElement("span", { style: S.ssVal2 }, s.value))))))));
   }
   function Upload({ onAdd, defaultTeam }) {
     const [date, setDate] = useState((/* @__PURE__ */ new Date()).toISOString().slice(0, 10));
@@ -884,6 +911,11 @@
     ssLbl: { fontSize: 12, color: T.muted, fontWeight: 700, minWidth: 110 },
     ssVal: { fontFamily: mono, fontSize: 15, fontWeight: 700 },
     ssPct: { marginLeft: "auto", fontFamily: mono, fontSize: 14, color: T.muted },
+    shotStatsGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 },
+    shotStatsCol: { background: T.surface, border: `1px solid ${T.line}`, borderRadius: 12, overflow: "hidden" },
+    ssItem: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 12px", borderBottom: `1px solid ${T.line}` },
+    ssLbl2: { fontSize: 12, color: T.muted, fontWeight: 700 },
+    ssVal2: { fontFamily: mono, fontSize: 13, fontWeight: 700 },
     ghostBtn: { background: "transparent", color: T.text, border: `1px solid ${T.line}`, borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" },
     primaryBtn: { background: T.us, color: "#0E1015", border: "none", borderRadius: 10, padding: "9px 20px", fontSize: 14, fontWeight: 800, cursor: "pointer" }
   };
