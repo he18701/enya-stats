@@ -125,18 +125,39 @@
   ];
   const TEAM_ROWS = [
     { label: "\u5F97\u70B9", fn: (p) => sum(p, "PTS") },
-    { label: "2P", fn: (p) => {
-      const m = sum(p, "2PM"), a = sum(p, "2PA");
-      return `${m}/${a}\uFF08${a ? Math.round(m / a * 100) + "%" : "-%"}\uFF09`;
-    } },
-    { label: "3P", fn: (p) => {
-      const m = sum(p, "3PM"), a = sum(p, "3PA");
-      return `${m}/${a}\uFF08${a ? Math.round(m / a * 100) + "%" : "-%"}\uFF09`;
-    } },
-    { label: "FT", fn: (p) => {
-      const m = sum(p, "FTM"), a = sum(p, "FTA");
-      return `${m}/${a}\uFF08${a ? Math.round(m / a * 100) + "%" : "-%"}\uFF09`;
-    } },
+    {
+      label: "2P",
+      fn: (p) => {
+        const m = sum(p, "2PM"), a = sum(p, "2PA");
+        return `${m}/${a}\uFF08${a ? Math.round(m / a * 100) + "%" : "-%"}\uFF09`;
+      },
+      pctFn: (p) => {
+        const m = sum(p, "2PM"), a = sum(p, "2PA");
+        return a ? Math.round(m / a * 100) : null;
+      }
+    },
+    {
+      label: "3P",
+      fn: (p) => {
+        const m = sum(p, "3PM"), a = sum(p, "3PA");
+        return `${m}/${a}\uFF08${a ? Math.round(m / a * 100) + "%" : "-%"}\uFF09`;
+      },
+      pctFn: (p) => {
+        const m = sum(p, "3PM"), a = sum(p, "3PA");
+        return a ? Math.round(m / a * 100) : null;
+      }
+    },
+    {
+      label: "FT",
+      fn: (p) => {
+        const m = sum(p, "FTM"), a = sum(p, "FTA");
+        return `${m}/${a}\uFF08${a ? Math.round(m / a * 100) + "%" : "-%"}\uFF09`;
+      },
+      pctFn: (p) => {
+        const m = sum(p, "FTM"), a = sum(p, "FTA");
+        return a ? Math.round(m / a * 100) : null;
+      }
+    },
     { label: "\u30AA\u30D5\u30A7\u30F3\u30B9\u30EA\u30D0\u30A6\u30F3\u30C9", fn: (p) => sum(p, "OR") },
     { label: "\u30C7\u30A3\u30D5\u30A7\u30F3\u30B9\u30EA\u30D0\u30A6\u30F3\u30C9", fn: (p) => sum(p, "DR") },
     { label: "\u30EA\u30D0\u30A6\u30F3\u30C9(\u5408\u8A08)", fn: (p) => sum(p, "TR") },
@@ -442,11 +463,23 @@
     if (games.length < 2) return /* @__PURE__ */ React.createElement("div", { style: S.empty }, "\u6BD4\u8F03\u306B\u306F2\u8A66\u5408\u4EE5\u4E0A\u5FC5\u8981\u3067\u3059\u3002");
     return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: S.pickerRow }, /* @__PURE__ */ React.createElement("label", { style: S.pickLbl }, "\u8A66\u5408A"), /* @__PURE__ */ React.createElement("select", { value: aId, onChange: (e) => setAId(e.target.value), style: S.select }, rev.map((g) => /* @__PURE__ */ React.createElement("option", { key: g.id, value: g.id }, g.date, " vs ", g.opponent))), /* @__PURE__ */ React.createElement("label", { style: { ...S.pickLbl, marginLeft: 10 } }, "\u8A66\u5408B"), /* @__PURE__ */ React.createElement("select", { value: bId, onChange: (e) => setBId(e.target.value), style: S.select }, rev.map((g) => /* @__PURE__ */ React.createElement("option", { key: g.id, value: g.id }, g.date, " vs ", g.opponent)))), A && B && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: S.cmpHead }, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "right" } }, /* @__PURE__ */ React.createElement("div", { style: S.cmpDate }, A.date), /* @__PURE__ */ React.createElement("div", { style: S.cmpVs }, "vs ", A.opponent), /* @__PURE__ */ React.createElement("div", { style: { ...S.cmpScore, color: scoreClass(A.ourScore, A.oppScore) === "W" ? T.up : T.down } }, A.ourScore, "-", A.oppScore)), /* @__PURE__ */ React.createElement("div", { style: S.cmpArrow }, "\u6BD4\u8F03"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: S.cmpDate }, B.date), /* @__PURE__ */ React.createElement("div", { style: S.cmpVs }, "vs ", B.opponent), /* @__PURE__ */ React.createElement("div", { style: { ...S.cmpScore, color: scoreClass(B.ourScore, B.oppScore) === "W" ? T.up : T.down } }, B.ourScore, "-", B.oppScore))), /* @__PURE__ */ React.createElement("div", { style: S.sectionTitle }, "\u30C1\u30FC\u30E0\u96C6\u8A08\u306E\u5DEE\uFF08B \u2212 A\uFF09"), /* @__PURE__ */ React.createElement("div", { style: S.teamCompare }, TEAM_ROWS.map((r) => {
       const aVal = r.fn(A.ourPlayers), bVal = r.fn(B.ourPlayers);
-      const aNum = typeof aVal === "number" ? aVal : null;
-      const bNum = typeof bVal === "number" ? bVal : null;
-      const diff = aNum != null && bNum != null ? bNum - aNum : null;
       const lowerBetter = r.label === "\u30BF\u30FC\u30F3\u30AA\u30FC\u30D0\u30FC" || r.label === "\u30D5\u30A1\u30FC\u30EB";
-      return /* @__PURE__ */ React.createElement("div", { key: r.label, style: S.tcRow }, /* @__PURE__ */ React.createElement("div", { style: { ...S.tcVal, textAlign: "right" } }, aVal), /* @__PURE__ */ React.createElement("div", { style: S.tcLbl }, r.label), /* @__PURE__ */ React.createElement("div", { style: S.tcVal }, bVal), /* @__PURE__ */ React.createElement("div", { style: { width: 74, textAlign: "right" } }, diff != null ? /* @__PURE__ */ React.createElement(Delta, { v: diff, good: !lowerBetter }) : /* @__PURE__ */ React.createElement("span", { style: { color: T.muted } }, "\u2014")));
+      let diffEl;
+      if (r.pctFn) {
+        const aPct = r.pctFn(A.ourPlayers), bPct = r.pctFn(B.ourPlayers);
+        if (aPct != null && bPct != null) {
+          const d = bPct - aPct;
+          diffEl = /* @__PURE__ */ React.createElement("span", { style: { color: d > 0 ? T.up : d < 0 ? T.down : T.muted, fontWeight: 800 } }, d > 0 ? "\u25B2+" : d < 0 ? "\u25BC" : "", d, "%");
+        } else {
+          diffEl = /* @__PURE__ */ React.createElement("span", { style: { color: T.muted } }, "\u2014");
+        }
+      } else {
+        const aNum = typeof aVal === "number" ? aVal : null;
+        const bNum = typeof bVal === "number" ? bVal : null;
+        const diff = aNum != null && bNum != null ? bNum - aNum : null;
+        diffEl = diff != null ? /* @__PURE__ */ React.createElement(Delta, { v: diff, good: !lowerBetter }) : /* @__PURE__ */ React.createElement("span", { style: { color: T.muted } }, "\u2014");
+      }
+      return /* @__PURE__ */ React.createElement("div", { key: r.label, style: S.tcRow }, /* @__PURE__ */ React.createElement("div", { style: { ...S.tcVal, textAlign: "right" } }, aVal), /* @__PURE__ */ React.createElement("div", { style: S.tcLbl }, r.label), /* @__PURE__ */ React.createElement("div", { style: S.tcVal }, bVal), /* @__PURE__ */ React.createElement("div", { style: { width: 74, textAlign: "right" } }, diffEl));
     })), /* @__PURE__ */ React.createElement("div", { style: S.sectionTitle }, "\u9078\u624B\u3054\u3068\u306E\u5F97\u70B9\u5DEE\uFF08\u4E21\u8A66\u5408\u306B\u51FA\u5834\uFF09"), /* @__PURE__ */ React.createElement(PlayerDiff, { A, B })));
   }
   function PlayerDiff({ A, B }) {
@@ -554,7 +587,7 @@
         },
         n
       );
-    })), selected.length === 0 ? /* @__PURE__ */ React.createElement("div", { style: S.empty }, "\u9078\u624B\u30921\u4EBA\u4EE5\u4E0A\u9078\u3093\u3067\u304F\u3060\u3055\u3044\u3002") : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { ...S.panel, height: 320, padding: "10px 6px", marginTop: 12 } }, /* @__PURE__ */ React.createElement(MiniLineChart, { data, keys: selected, colors: LINE_COLORS, pct: !!statMeta?.pct })), /* @__PURE__ */ React.createElement("div", { style: S.sectionTitle }, "\u9078\u629E\u671F\u9593\u306E\u5909\u5316"), /* @__PURE__ */ React.createElement("div", { style: S.tableWrap }, /* @__PURE__ */ React.createElement("table", { style: S.table }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", { style: { ...S.th, ...S.thName } }, "\u9078\u624B"), filtered.map((g) => /* @__PURE__ */ React.createElement("th", { key: g.id, style: S.th }, g.date.slice(5))), /* @__PURE__ */ React.createElement("th", { style: S.th }, "\u5909\u5316"))), /* @__PURE__ */ React.createElement("tbody", null, selected.map((n, i) => {
+    })), selected.length === 0 ? /* @__PURE__ */ React.createElement("div", { style: S.empty }, "\u9078\u624B\u30921\u4EBA\u4EE5\u4E0A\u9078\u3093\u3067\u304F\u3060\u3055\u3044\u3002") : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { ...S.panel, height: 320, padding: "10px 6px", marginTop: 12 } }, /* @__PURE__ */ React.createElement(MiniLineChart, { data, keys: selected, colors: LINE_COLORS, pct: !!statMeta?.pct })), /* @__PURE__ */ React.createElement("div", { style: S.sectionTitle }, "\u9078\u629E\u671F\u9593\u306E\u5909\u5316"), /* @__PURE__ */ React.createElement("p", { style: S.note }, "\u300C\u5909\u5316\u300D\u306F\u9078\u629E\u3057\u305F\u8A66\u5408\u306E\u3046\u3061\u6700\u521D\uFF08", filtered[0]?.date.slice(5), "\uFF09\u3068\u6700\u65B0\uFF08", filtered[filtered.length - 1]?.date.slice(5), "\uFF09\u306E\u5DEE\u3067\u3059\u3002"), /* @__PURE__ */ React.createElement("div", { style: S.tableWrap }, /* @__PURE__ */ React.createElement("table", { style: S.table }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", { style: { ...S.th, ...S.thName } }, "\u9078\u624B"), filtered.map((g) => /* @__PURE__ */ React.createElement("th", { key: g.id, style: S.th }, g.date.slice(5))), /* @__PURE__ */ React.createElement("th", { style: S.th }, "\u521D\u56DE\u2192\u6700\u65B0"))), /* @__PURE__ */ React.createElement("tbody", null, selected.map((n, i) => {
       const vals = filtered.map((g) => {
         const p = g.ourPlayers.find((x) => x.Name === n);
         return p ? statValue(p, stat) : null;
