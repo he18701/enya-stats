@@ -788,7 +788,7 @@
     ), /* @__PURE__ */ React.createElement(
       "button",
       {
-        onClick: () => setMode("delete"),
+        onClick: () => setMode(mode === "delete" ? "plot" : "delete"),
         style: S.toolBtn(mode === "delete", T.gold)
       },
       mode === "delete" ? "\u524A\u9664\u4E2D" : "\u524A\u9664"
