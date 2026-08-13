@@ -356,9 +356,10 @@
   async function deleteGameRemote(id) {
     await sb.from("games").delete().eq("id", id);
   }
-  async function swapSortOrder(idA, orderA, idB, orderB) {
-    await sb.from("games").update({ sort_order: orderB }).eq("id", idA);
-    await sb.from("games").update({ sort_order: orderA }).eq("id", idB);
+  async function reorderGames(orderedIds) {
+    for (let i = 0; i < orderedIds.length; i++) {
+      await sb.from("games").update({ sort_order: i }).eq("id", orderedIds[i]);
+    }
   }
   function App() {
     const [games, setGames] = useState([]);
@@ -415,9 +416,12 @@
       const idx = games.findIndex((g) => g.id === id);
       const swapIdx = idx + direction;
       if (swapIdx < 0 || swapIdx >= games.length) return;
-      const a = games[idx], b = games[swapIdx];
+      const newOrder = games.map((g) => g.id);
+      const tmp = newOrder[idx];
+      newOrder[idx] = newOrder[swapIdx];
+      newOrder[swapIdx] = tmp;
       setBusy(true);
-      await swapSortOrder(a.id, a.sortOrder, b.id, b.sortOrder);
+      await reorderGames(newOrder);
       await refresh(activeId);
       setBusy(false);
     }
