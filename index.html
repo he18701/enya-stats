@@ -448,16 +448,26 @@
     return /* @__PURE__ */ React.createElement("div", { style: S.board }, /* @__PURE__ */ React.createElement("div", { style: S.boardSide }, /* @__PURE__ */ React.createElement("div", { style: { ...S.boardTeam, color: T.us } }, game.ourTeam), /* @__PURE__ */ React.createElement("div", { style: S.boardScore }, game.ourScore)), /* @__PURE__ */ React.createElement("div", { style: S.boardMid }, /* @__PURE__ */ React.createElement("div", { style: { ...S.resultPill, color: resColor, borderColor: resColor } }, res === "W" ? "WIN" : res === "L" ? "LOSE" : "DRAW"), /* @__PURE__ */ React.createElement("div", { style: S.boardDate }, game.date), game.ourQ && /* @__PURE__ */ React.createElement("div", { style: S.qrow }, ["1Q", "2Q", "3Q", "4Q"].map((q, i) => /* @__PURE__ */ React.createElement("div", { key: q, style: S.qcell }, /* @__PURE__ */ React.createElement("div", { style: S.qlbl }, q), /* @__PURE__ */ React.createElement("div", { style: { color: T.us } }, game.ourQ?.[i] ?? "-"), /* @__PURE__ */ React.createElement("div", { style: { color: T.them } }, game.oppQ?.[i] ?? "-"))))), /* @__PURE__ */ React.createElement("div", { style: { ...S.boardSide, alignItems: "flex-end" } }, /* @__PURE__ */ React.createElement("div", { style: { ...S.boardTeam, color: T.them } }, game.opponent), /* @__PURE__ */ React.createElement("div", { style: S.boardScore }, game.oppScore)));
   }
   function GameList({ games, onOpen, onDate, onDelete, onMove }) {
+    const [editMode, setEditMode] = useState(false);
+    function enterEdit() {
+      const pw = prompt("\u30D1\u30B9\u30EF\u30FC\u30C9\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044");
+      if (pw === "enya") setEditMode(true);
+      else if (pw != null) alert("\u30D1\u30B9\u30EF\u30FC\u30C9\u304C\u9055\u3044\u307E\u3059");
+    }
     if (!games.length) return /* @__PURE__ */ React.createElement("div", { style: S.empty }, "\u307E\u3060\u8A66\u5408\u304C\u3042\u308A\u307E\u305B\u3093\u3002\u300C\u30A2\u30C3\u30D7\u30ED\u30FC\u30C9\u300D\u304B\u3089\u8FFD\u52A0\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
     const view = [...games].reverse();
-    return /* @__PURE__ */ React.createElement("div", { style: S.grid }, view.map((g, vi) => {
+    return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "flex-end", marginBottom: 10 } }, editMode ? /* @__PURE__ */ React.createElement("button", { onClick: () => setEditMode(false), style: { ...S.ghostBtn, fontSize: 12 } }, "\u2713 \u7DE8\u96C6\u3092\u7D42\u4E86") : /* @__PURE__ */ React.createElement("button", { onClick: enterEdit, style: { ...S.ghostBtn, fontSize: 12, padding: "6px 10px" } }, "\u2699 \u7DE8\u96C6")), /* @__PURE__ */ React.createElement("div", { style: S.grid }, view.map((g, vi) => {
       const res = scoreClass(g.ourScore, g.oppScore);
       const c = res === "W" ? T.up : res === "L" ? T.down : T.muted;
       const realIdx = games.indexOf(g);
-      return /* @__PURE__ */ React.createElement("div", { key: g.id, style: S.card }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } }, /* @__PURE__ */ React.createElement("span", { style: { ...S.resDot, background: c } }), /* @__PURE__ */ React.createElement("span", { style: { ...S.resTxt, color: c } }, res === "W" ? "\u52DD\u3061" : res === "L" ? "\u8CA0\u3051" : "\u5F15\u5206"), /* @__PURE__ */ React.createElement("input", { type: "date", value: g.date, onChange: (e) => onDate(g.id, e.target.value), style: S.dateInput, onClick: (e) => e.stopPropagation() })), /* @__PURE__ */ React.createElement("div", { style: S.cardMatch, onClick: () => onOpen(g.id) }, /* @__PURE__ */ React.createElement("span", { style: { color: T.us } }, g.ourTeam), /* @__PURE__ */ React.createElement("span", { style: S.cardScore }, g.ourScore, " ", /* @__PURE__ */ React.createElement("span", { style: { color: T.muted } }, "-"), " ", g.oppScore), /* @__PURE__ */ React.createElement("span", { style: { color: T.them } }, g.opponent)), /* @__PURE__ */ React.createElement("div", { style: S.cardActions }, /* @__PURE__ */ React.createElement("button", { style: S.ghostBtn, onClick: () => onOpen(g.id) }, "\u8A73\u7D30\u3092\u898B\u308B"), /* @__PURE__ */ React.createElement("button", { style: { ...S.ghostBtn, padding: "8px 10px", fontSize: 12 }, onClick: () => onMove(g.id, -1), disabled: realIdx === 0 }, "\u25B2"), /* @__PURE__ */ React.createElement("button", { style: { ...S.ghostBtn, padding: "8px 10px", fontSize: 12 }, onClick: () => onMove(g.id, 1), disabled: realIdx === games.length - 1 }, "\u25BC"), /* @__PURE__ */ React.createElement("button", { style: { ...S.ghostBtn, color: T.down }, onClick: () => {
+      return /* @__PURE__ */ React.createElement("div", { key: g.id, style: S.card }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } }, /* @__PURE__ */ React.createElement("span", { style: { ...S.resDot, background: c } }), /* @__PURE__ */ React.createElement("span", { style: { ...S.resTxt, color: c } }, res === "W" ? "\u52DD\u3061" : res === "L" ? "\u8CA0\u3051" : "\u5F15\u5206"), editMode ? /* @__PURE__ */ React.createElement("input", { type: "date", value: g.date, onChange: (e) => onDate(g.id, e.target.value), style: S.dateInput, onClick: (e) => e.stopPropagation() }) : /* @__PURE__ */ React.createElement("span", { style: { marginLeft: "auto", fontSize: 12, color: T.muted, fontFamily: mono } }, g.date)), /* @__PURE__ */ React.createElement("div", { style: S.cardMatch, onClick: () => onOpen(g.id) }, /* @__PURE__ */ React.createElement("span", { style: { color: T.us } }, g.ourTeam), /* @__PURE__ */ React.createElement("span", { style: S.cardScore }, g.ourScore, " ", /* @__PURE__ */ React.createElement("span", { style: { color: T.muted } }, "-"), " ", g.oppScore), /* @__PURE__ */ React.createElement("span", { style: { color: T.them } }, g.opponent)), /* @__PURE__ */ React.createElement("div", { style: S.cardActions }, /* @__PURE__ */ React.createElement("button", { style: S.ghostBtn, onClick: () => onOpen(g.id) }, "\u8A73\u7D30\u3092\u898B\u308B"), editMode && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { style: { ...S.ghostBtn, padding: "8px 10px", fontSize: 12 }, onClick: () => {
+        if (confirm("\u9806\u756A\u3092\u5909\u66F4\u3057\u307E\u3059\u304B\uFF1F")) onMove(g.id, -1);
+      }, disabled: realIdx === 0 }, "\u25B2"), /* @__PURE__ */ React.createElement("button", { style: { ...S.ghostBtn, padding: "8px 10px", fontSize: 12 }, onClick: () => {
+        if (confirm("\u9806\u756A\u3092\u5909\u66F4\u3057\u307E\u3059\u304B\uFF1F")) onMove(g.id, 1);
+      }, disabled: realIdx === games.length - 1 }, "\u25BC"), /* @__PURE__ */ React.createElement("button", { style: { ...S.ghostBtn, color: T.down }, onClick: () => {
         if (confirm("\u3053\u306E\u8A66\u5408\u3092\u524A\u9664\u3057\u307E\u3059\u304B\uFF1F")) onDelete(g.id);
-      } }, "\u524A\u9664")));
-    }));
+      } }, "\u524A\u9664"))));
+    })));
   }
   function GameDetail({ game, games, onPick }) {
     if (!game) return /* @__PURE__ */ React.createElement("div", { style: S.empty }, "\u8A66\u5408\u3092\u9078\u3093\u3067\u304F\u3060\u3055\u3044\u3002");
@@ -705,7 +715,7 @@
     const game = games.find((g) => g.id === activeId) || null;
     const [player, setPlayer] = useState("__ALL__");
     const [made, setMade] = useState(true);
-    const [mode, setMode] = useState("add");
+    const [mode, setMode] = useState("view");
     if (!games.length) return /* @__PURE__ */ React.createElement("div", { style: S.empty }, "\u5148\u306B\u8A66\u5408\u3092\u767B\u9332\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
     if (!game) return /* @__PURE__ */ React.createElement("div", { style: S.empty }, "\u8A66\u5408\u3092\u9078\u3093\u3067\u304F\u3060\u3055\u3044\u3002");
     const roster = game.ourPlayers.filter(isRealPlayer).map((p) => p.Name);
@@ -720,7 +730,7 @@
     const ftm = sp ? Number(sp.FTM) || 0 : 0;
     const fta = sp ? Number(sp.FTA) || 0 : 0;
     function tap(x, y) {
-      if (mode !== "add") return;
+      if (mode !== "plot") return;
       if (player === "__ALL__") {
         alert("\u5148\u306B\u9078\u624B\u3092\u9078\u3093\u3067\u304F\u3060\u3055\u3044\u3002");
         return;
@@ -746,34 +756,46 @@
     return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: S.pickerRow }, /* @__PURE__ */ React.createElement("label", { style: S.pickLbl }, "\u8A66\u5408"), /* @__PURE__ */ React.createElement("select", { value: game.id, onChange: (e) => onPick(e.target.value), style: S.select }, [...games].reverse().map((g) => /* @__PURE__ */ React.createElement("option", { key: g.id, value: g.id }, g.date, "\u3000vs ", g.opponent)))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" } }, /* @__PURE__ */ React.createElement("div", { style: { flex: "1 1 180px", minWidth: 160, maxWidth: 240 } }, /* @__PURE__ */ React.createElement("div", { style: S.playerListWrap }, /* @__PURE__ */ React.createElement("button", { onClick: () => setPlayer("__ALL__"), style: S.playerRow(player === "__ALL__") }, game.ourTeam, "\uFF08\u5408\u8A08\uFF09"), roster.map((n) => {
       const c = allShots.filter((s) => s.player === n).length;
       return /* @__PURE__ */ React.createElement("button", { key: n, onClick: () => setPlayer(n), style: S.playerRow(player === n) }, /* @__PURE__ */ React.createElement("span", null, n), c > 0 && /* @__PURE__ */ React.createElement("span", { style: { marginLeft: "auto", fontSize: 11, opacity: 0.75, fontFamily: mono } }, c));
-    }))), /* @__PURE__ */ React.createElement("div", { style: { flex: "2 1 320px", minWidth: 280 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap", alignItems: "center" } }, /* @__PURE__ */ React.createElement(
+    }))), /* @__PURE__ */ React.createElement("div", { style: { flex: "2 1 320px", minWidth: 280 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap", alignItems: "center" } }, mode === "view" ? /* @__PURE__ */ React.createElement("div", { style: { marginLeft: "auto" } }, /* @__PURE__ */ React.createElement(
       "button",
       {
         onClick: () => {
-          setMode("add");
-          setMade(true);
+          const pw = prompt("\u30D1\u30B9\u30EF\u30FC\u30C9\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044");
+          if (pw === "enya") setMode("plot");
+          else if (pw != null) alert("\u30D1\u30B9\u30EF\u30FC\u30C9\u304C\u9055\u3044\u307E\u3059");
         },
-        style: S.toolBtn(mode === "add" && made, T.them)
+        style: { ...S.ghostBtn, fontSize: 12 }
+      },
+      "\u2699 \u30D7\u30ED\u30C3\u30C8"
+    )) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => setMade(true),
+        style: S.toolBtn(made, T.them)
       },
       "\u25CF \u6210\u529F"
     ), /* @__PURE__ */ React.createElement(
       "button",
       {
-        onClick: () => {
-          setMode("add");
-          setMade(false);
-        },
-        style: S.toolBtn(mode === "add" && !made, T.down)
+        onClick: () => setMade(false),
+        style: S.toolBtn(!made, T.down)
       },
       "\u2715 \u5931\u6557"
     ), /* @__PURE__ */ React.createElement(
       "button",
       {
-        onClick: () => setMode(mode === "delete" ? "add" : "delete"),
+        onClick: () => setMode("delete"),
         style: S.toolBtn(mode === "delete", T.gold)
       },
-      mode === "delete" ? "\u524A\u9664\u30E2\u30FC\u30C9\u4E2D" : "\u524A\u9664\u30E2\u30FC\u30C9"
-    )), /* @__PURE__ */ React.createElement("div", { style: { maxWidth: 420 } }, /* @__PURE__ */ React.createElement(CourtSVG, { shots: shown, onTap: tap, onRemove: onRemoveShot, mode })), /* @__PURE__ */ React.createElement("p", { style: { ...S.note, marginTop: 8, fontSize: 12 } }, mode === "delete" ? "\u30B3\u30FC\u30C8\u4E0A\u306E\u30DE\u30FC\u30AB\u30FC\u3092\u30BF\u30C3\u30D7\u3067\u524A\u9664\u3002" : player === "__ALL__" ? "\u9078\u624B\u3092\u9078\u3076\u3068\u30B3\u30FC\u30C8\u3092\u30BF\u30C3\u30D7\u3057\u3066\u8A18\u9332\u3067\u304D\u307E\u3059\u3002" : `\u300C${player}\u300D\u306E\u8A18\u9332\u4E2D\uFF1A\u30BF\u30C3\u30D7\u3067${made ? "\u6210\u529F" : "\u5931\u6557"}\u3092\u8FFD\u52A0\u30022P/3P\u306F\u81EA\u52D5\u5224\u5B9A\u3002`), /* @__PURE__ */ React.createElement("div", { style: S.shotStatsGrid }, /* @__PURE__ */ React.createElement("div", { style: S.shotStatsCol }, statsLeft.map((s) => /* @__PURE__ */ React.createElement("div", { key: s.label, style: S.ssItem }, /* @__PURE__ */ React.createElement("span", { style: S.ssLbl2 }, s.label), /* @__PURE__ */ React.createElement("span", { style: { ...S.ssVal2, color: s.highlight ? T.us : T.text } }, s.value)))), /* @__PURE__ */ React.createElement("div", { style: S.shotStatsCol }, statsRight.map((s) => /* @__PURE__ */ React.createElement("div", { key: s.label, style: S.ssItem }, /* @__PURE__ */ React.createElement("span", { style: S.ssLbl2 }, s.label), /* @__PURE__ */ React.createElement("span", { style: S.ssVal2 }, s.value))))))));
+      mode === "delete" ? "\u524A\u9664\u4E2D" : "\u524A\u9664"
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => setMode("view"),
+        style: { ...S.ghostBtn, fontSize: 13 }
+      },
+      "\u7D42\u4E86"
+    ))), /* @__PURE__ */ React.createElement("div", { style: { maxWidth: 420 } }, /* @__PURE__ */ React.createElement(CourtSVG, { shots: shown, onTap: mode === "plot" ? tap : null, onRemove: onRemoveShot, mode })), /* @__PURE__ */ React.createElement("p", { style: { ...S.note, marginTop: 8, fontSize: 12 } }, mode === "view" ? "\u53F3\u4E0A\u306E\u300C\u2699 \u30D7\u30ED\u30C3\u30C8\u300D\u3067\u30B7\u30E5\u30FC\u30C8\u306E\u8A18\u9332\u30FB\u524A\u9664\u304C\u3067\u304D\u307E\u3059\u3002" : mode === "delete" ? "\u30B3\u30FC\u30C8\u4E0A\u306E\u30DE\u30FC\u30AB\u30FC\u3092\u30BF\u30C3\u30D7\u3067\u524A\u9664\u3002\u300C\u524A\u9664\u300D\u3092\u3082\u3046\u4E00\u5EA6\u62BC\u3059\u3068\u30D7\u30ED\u30C3\u30C8\u306B\u623B\u308A\u307E\u3059\u3002" : player === "__ALL__" ? "\u5DE6\u306E\u4E00\u89A7\u304B\u3089\u9078\u624B\u3092\u9078\u3093\u3067\u304F\u3060\u3055\u3044\u3002" : `\u300C${player}\u300D\u306E\u8A18\u9332\u4E2D\uFF1A\u30B3\u30FC\u30C8\u3092\u30BF\u30C3\u30D7\u3067${made ? "\u6210\u529F" : "\u5931\u6557"}\u3092\u8FFD\u52A0\u30022P/3P\u306F\u81EA\u52D5\u5224\u5B9A\u3002`), /* @__PURE__ */ React.createElement("div", { style: S.shotStatsGrid }, /* @__PURE__ */ React.createElement("div", { style: S.shotStatsCol }, statsLeft.map((s) => /* @__PURE__ */ React.createElement("div", { key: s.label, style: S.ssItem }, /* @__PURE__ */ React.createElement("span", { style: S.ssLbl2 }, s.label), /* @__PURE__ */ React.createElement("span", { style: { ...S.ssVal2, color: s.highlight ? T.us : T.text } }, s.value)))), /* @__PURE__ */ React.createElement("div", { style: S.shotStatsCol }, statsRight.map((s) => /* @__PURE__ */ React.createElement("div", { key: s.label, style: S.ssItem }, /* @__PURE__ */ React.createElement("span", { style: S.ssLbl2 }, s.label), /* @__PURE__ */ React.createElement("span", { style: S.ssVal2 }, s.value))))))));
   }
   function Upload({ onAdd, defaultTeam }) {
     const [date, setDate] = useState((/* @__PURE__ */ new Date()).toISOString().slice(0, 10));
