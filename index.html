@@ -1,0 +1,938 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>塩冶オールスターズ STAT BOARD</title>
+<link rel="icon" href="data:,">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<style>
+  html, body { margin: 0; padding: 0; background: #0E1015; }
+  * { box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useRef } = React;
+
+/* ============================================================
+   塩冶オールスターズ  STAT BOARD  — Supabase接続版
+   ============================================================ */
+
+// !!! ここを自分のSupabaseプロジェクトの値に書き換えてください !!!
+const SUPABASE_URL = "https://eclggpmhsueksrxvuupo.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_TOdOtMrWzS4hUKNG5T5Lgg_98Kutkqx";
+
+const CONFIGURED = SUPABASE_URL.startsWith("https://") && SUPABASE_ANON_KEY.length > 10;
+const sb = CONFIGURED ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+// ---- design tokens ------------------------------------------------
+const T = {
+  ink: "#0E1015", surface: "#191C24", surface2: "#22262F", line: "#2E333F",
+  text: "#E8EAF0", muted: "#8A90A0",
+  us: "#FF7A1A", them: "#3EA6FF", up: "#35D07F", down: "#FF5470", gold: "#F5C451",
+};
+const LINE_COLORS = ["#FF7A1A", "#3EA6FF", "#35D07F", "#F5C451", "#B98CFF", "#FF6FA3"];
+
+const FIELDS = [
+  "Name","PTS","FGA","FGM","FG%","2PM","2PA","2P%","3PM","3PA","3P%",
+  "FTM","FTA","FT%","OR","DR","TR","AS","ST","BS","TO","F","EFF","MIN",
+];
+const NUM_FIELDS = new Set(["PTS","FGA","FGM","2PM","2PA","3PM","3PA","FTM","FTA","OR","DR","TR","AS","ST","BS","TO","F","EFF"]);
+
+const DB_FIELD_MAP = {
+  Name:"name", PTS:"pts", FGA:"fga", FGM:"fgm", "FG%":"fg_pct",
+  "2PM":"pm2","2PA":"pa2","2P%":"pct2","3PM":"pm3","3PA":"pa3","3P%":"pct3",
+  FTM:"ftm", FTA:"fta", "FT%":"ft_pct", OR:"o_r", DR:"d_r", TR:"tr",
+  AS:"ast", ST:"stl", BS:"blk", TO:"tov", F:"fouls", EFF:"eff", MIN:"minutes",
+};
+
+const TREND_STATS = [
+  { key: "PTS", label: "得点", pct: false, lowerBetter: false },
+  { key: "EFF", label: "効率(EFF)", pct: false, lowerBetter: false },
+  { key: "TR",  label: "リバウンド", pct: false, lowerBetter: false },
+  { key: "AS",  label: "アシスト", pct: false, lowerBetter: false },
+  { key: "ST",  label: "スティール", pct: false, lowerBetter: false },
+  { key: "FGM", label: "FG成功", pct: false, lowerBetter: false },
+  { key: "FG%", label: "FG成功率", pct: true,  lowerBetter: false },
+  { key: "TO",  label: "ターンオーバー", pct: false, lowerBetter: true },
+];
+
+const TEAM_ROWS = [
+  { label: "得点", fn: (p) => sum(p, "PTS") },
+  { label: "FG成功/試投", fn: (p) => `${sum(p,"FGM")}/${sum(p,"FGA")}` },
+  { label: "3P成功/試投", fn: (p) => `${sum(p,"3PM")}/${sum(p,"3PA")}` },
+  { label: "FT成功/試投", fn: (p) => `${sum(p,"FTM")}/${sum(p,"FTA")}` },
+  { label: "リバウンド", fn: (p) => sum(p,"TR") },
+  { label: "アシスト", fn: (p) => sum(p,"AS") },
+  { label: "スティール", fn: (p) => sum(p,"ST") },
+  { label: "ブロック", fn: (p) => sum(p,"BS") },
+  { label: "ターンオーバー", fn: (p) => sum(p,"TO") },
+  { label: "ファール", fn: (p) => sum(p,"F") },
+  { label: "効率(EFF)", fn: (p) => sum(p,"EFF") },
+];
+
+// ---- コート寸法（FIBA準拠・1m = 33.33単位）------------------------
+const COURT = {
+  W: 500, H: 466,          // 15m × 14m
+  bx: 250, by: 52.5,       // バスケットリング中心（ベースラインから1.575m）
+  arc3: 225,               // 3Pアーク半径 6.75m
+  corner: 30,              // コーナー3Pライン（サイドラインから0.9m）
+  paintL: 168.5, paintR: 331.5, // ペイント幅 4.9m
+  ftY: 193,                // フリースローライン 5.8m
+  ftR: 60,                 // FTサークル半径 1.8m
+  restrictR: 42,           // ノーチャージセミサークル 1.25m
+  rimR: 7.5,
+};
+// 座標から2P/3Pを自動判定
+function isThreePoint(x, y) {
+  if (x <= COURT.corner || x >= COURT.W - COURT.corner) return true;
+  const dx = x - COURT.bx, dy = y - COURT.by;
+  return Math.sqrt(dx * dx + dy * dy) > COURT.arc3;
+}
+
+// ---- helpers ------------------------------------------------------
+function sum(players, key) { return players.filter(isRealPlayer).reduce((a, p) => a + (Number(p[key]) || 0), 0); }
+function isRealPlayer(p) { return p && p.Name && p.Name !== "チーム"; }
+function toNumeric(field, raw) {
+  if (raw == null) return "";
+  const v = String(raw).trim();
+  if (NUM_FIELDS.has(field)) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+  return v;
+}
+function parsePct(v) { if (v == null) return null; const m = String(v).match(/-?\d+(\.\d+)?/); return m ? Number(m[0]) : null; }
+function statValue(player, statKey) { if (statKey === "FG%") return parsePct(player["FG%"]); return Number(player[statKey]) || 0; }
+
+function parseRoster(text) {
+  if (!text || !text.trim()) return [];
+  const res = Papa.parse(text.trim(), { skipEmptyLines: true });
+  let rows = res.data;
+  if (!rows.length) return [];
+  const first = rows[0].map((c) => String(c).trim());
+  if (first[0] && /name/i.test(first[0])) rows = rows.slice(1);
+  const players = [];
+  for (const r of rows) {
+    if (!r[0] || !String(r[0]).trim()) continue;
+    const p = {};
+    FIELDS.forEach((f, i) => { p[f] = toNumeric(f, r[i]); });
+    players.push(p);
+  }
+  return players;
+}
+function computeScore(players) { return sum(players, "PTS"); }
+
+function playerToRow(gameId, side, player) {
+  const row = { game_id: gameId, side };
+  for (const f of FIELDS) { const col = DB_FIELD_MAP[f]; row[col] = player[f] === "" ? null : player[f]; }
+  return row;
+}
+function rowToPlayer(row) {
+  const p = {};
+  for (const f of FIELDS) { const col = DB_FIELD_MAP[f]; p[f] = row[col] == null ? "" : row[col]; }
+  return p;
+}
+
+// ---- Supabase I/O ---------------------------------------------------
+async function loadGames() {
+  const { data, error } = await sb.from("games").select("*, player_stats(*), shots(*)").order("match_date", { ascending: true });
+  if (error) { console.error(error); return []; }
+  return data.map((g) => ({
+    id: g.id, date: g.match_date, ourTeam: g.our_team, opponent: g.opponent,
+    ourScore: g.our_score, oppScore: g.opp_score, ourQ: g.our_q, oppQ: g.opp_q,
+    ourPlayers: g.player_stats.filter((r) => r.side === "us").map(rowToPlayer),
+    oppPlayers: g.player_stats.filter((r) => r.side === "opp").map(rowToPlayer),
+    shots: (g.shots || []).map((s) => ({
+      id: s.id, player: s.player_name, x: Number(s.x), y: Number(s.y),
+      made: s.made, three: s.is_three,
+    })),
+  }));
+}
+async function insertShot(gameId, player, x, y, made) {
+  const { data, error } = await sb.from("shots").insert({
+    game_id: gameId, player_name: player, x, y, made, is_three: isThreePoint(x, y),
+  }).select().single();
+  if (error) { alert("シュートの保存に失敗しました: " + error.message); return null; }
+  return { id: data.id, player, x, y, made, three: data.is_three };
+}
+async function deleteShot(id) { await sb.from("shots").delete().eq("id", id); }
+async function insertGame(game) {
+  const { data: gameRow, error } = await sb.from("games").insert({
+    match_date: game.date, our_team: game.ourTeam, opponent: game.opponent,
+    our_score: game.ourScore, opp_score: game.oppScore, our_q: game.ourQ, opp_q: game.oppQ,
+  }).select().single();
+  if (error) { alert("保存に失敗しました: " + error.message); return null; }
+  const rows = [
+    ...game.ourPlayers.map((p) => playerToRow(gameRow.id, "us", p)),
+    ...game.oppPlayers.map((p) => playerToRow(gameRow.id, "opp", p)),
+  ];
+  if (rows.length) {
+    const { error: e2 } = await sb.from("player_stats").insert(rows);
+    if (e2) alert("選手データの保存に失敗しました: " + e2.message);
+  }
+  return gameRow.id;
+}
+async function updateGameDate(id, date) { await sb.from("games").update({ match_date: date }).eq("id", id); }
+async function deleteGameRemote(id) { await sb.from("games").delete().eq("id", id); }
+
+// ---- 初回シードデータ（3試合）---------------------------------------
+const SEED = [
+  {
+    date: "2026-06-15", ourTeam: "塩冶オールスターズ", opponent: "Green Braves",
+    ourQ: [12,13,12,14], oppQ: [14,13,17,8],
+    ourTSV: `Name\tPTS\tFGA\tFGM\tFG%\t2PM\t2PA\t2P%\t3PM\t3PA\t3P%\tFTM\tFTA\tFT%\tOR\tDR\tTR\tAS\tST\tBS\tTO\tF\tEFF\tMIN
+リョウ\t10\t7\t4\t57%\t4\t5\t80%\t0\t2\t0%\t2\t4\t50\t3\t5\t8\t3\t0\t1\t5\t2\t12\t12:00
+コウセイ\t19\t15\t8\t53%\t8\t14\t57%\t0\t1\t0%\t3\t3\t100\t7\t3\t10\t1\t0\t0\t1\t3\t22\t12:00`,
+    oppTSV: `Name\tPTS\tFGA\tFGM\tFG%\t2PM\t2PA\t2P%\t3PM\t3PA\t3P%\tFTM\tFTA\tFT%\tOR\tDR\tTR\tAS\tST\tBS\tTO\tF\tEFF\tMIN
+プレイヤー4\t13\t15\t5\t33%\t4\t9\t44%\t1\t6\t16%\t2\t2\t100\t0\t1\t1\t0\t0\t0\t3\t3\t1\t12:00`,
+  },
+];
+
+// ==================================================================
+//  App
+// ==================================================================
+function App() {
+  const [games, setGames] = useState([]);
+  const [ready, setReady] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState("games");
+  const [activeId, setActiveId] = useState(null);
+
+  useEffect(() => {
+    if (!CONFIGURED) { setReady(true); return; }
+    (async () => {
+      let g = await loadGames();
+      setGames(g);
+      setActiveId(g.length ? g[g.length - 1].id : null);
+      setReady(true);
+    })();
+  }, []);
+
+  async function refresh(keepId) {
+    const g = await loadGames();
+    setGames(g);
+    if (!keepId || !g.find((x) => x.id === keepId)) setActiveId(g.length ? g[g.length - 1].id : null);
+    else setActiveId(keepId);
+  }
+
+  async function addGame(game) {
+    setBusy(true);
+    const id = await insertGame(game);
+    await refresh(id);
+    setBusy(false);
+    if (id) setTab("detail");
+  }
+  async function deleteGame(id) { setBusy(true); await deleteGameRemote(id); await refresh(); setBusy(false); }
+  async function patchDate(id, date) { await updateGameDate(id, date); await refresh(activeId); }
+
+  // シュートは即時保存（画面は先に更新して待ち時間をなくす）
+  async function addShot(gameId, player, x, y, made) {
+    const temp = { id: "tmp-" + Math.random(), player, x, y, made, three: isThreePoint(x, y) };
+    setGames((gs) => gs.map((g) => (g.id === gameId ? { ...g, shots: [...(g.shots || []), temp] } : g)));
+    const saved = await insertShot(gameId, player, x, y, made);
+    setGames((gs) => gs.map((g) => (g.id === gameId
+      ? { ...g, shots: (g.shots || []).map((s) => (s.id === temp.id ? (saved || s) : s)) } : g)));
+  }
+  async function removeShot(shotId) {
+    setGames((gs) => gs.map((g) => ({ ...g, shots: (g.shots || []).filter((s) => s.id !== shotId) })));
+    await deleteShot(shotId);
+  }
+
+  const activeGame = games.find((g) => g.id === activeId) || null;
+
+  if (!CONFIGURED) {
+    return (
+      <div style={S.app}>
+        <div style={{ maxWidth: 520, margin: "80px auto", padding: 24, textAlign: "center" }}>
+          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 10 }}>Supabase未設定です</div>
+          <p style={{ color: T.muted, fontSize: 14, lineHeight: 1.8 }}>
+            index.html 内の SUPABASE_URL と SUPABASE_ANON_KEY を、Supabaseプロジェクトの値に書き換えてください。
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const TABS = [
+    { id: "games", label: "試合一覧" }, { id: "detail", label: "試合詳細" },
+    { id: "shots", label: "シュートチャート" },
+    { id: "compare", label: "試合比較" }, { id: "growth", label: "選手の成長" },
+    { id: "upload", label: "アップロード" },
+  ];
+
+  return (
+    <div style={S.app}>
+      <header style={S.header}>
+        <div style={S.brandRow}>
+          <div style={S.badge}>SIO</div>
+          <div>
+            <div style={S.brandName}>塩冶オールスターズ <span style={{ color: T.muted, fontWeight: 600 }}>STAT BOARD</span></div>
+            <div style={S.brandSub}>試合スタッツを 見る・比べる・成長を追う</div>
+          </div>
+          <div style={{ marginLeft: "auto", textAlign: "right" }}>
+            <div style={S.count}>{games.length}</div>
+            <div style={S.countLbl}>試合</div>
+          </div>
+        </div>
+        <nav style={S.tabs}>
+          {TABS.map((t) => (
+            <button key={t.id} onClick={() => setTab(t.id)} style={S.tab(tab === t.id)}>{t.label}</button>
+          ))}
+        </nav>
+      </header>
+      <main style={S.main}>
+        {!ready && <div style={S.empty}>読み込み中…</div>}
+        {ready && busy && <div style={S.empty}>保存中…</div>}
+        {ready && !busy && tab === "games" && (
+          <GameList games={games} onOpen={(id) => { setActiveId(id); setTab("detail"); }} onDate={patchDate} onDelete={deleteGame} />
+        )}
+        {ready && !busy && tab === "detail" && <GameDetail game={activeGame} games={games} onPick={setActiveId} />}
+        {ready && !busy && tab === "shots" && (
+          <ShotChart games={games} activeId={activeId} onPick={setActiveId} onAddShot={addShot} onRemoveShot={removeShot} />
+        )}
+        {ready && !busy && tab === "compare" && <Compare games={games} />}
+        {ready && !busy && tab === "growth" && <Growth games={games} />}
+        {ready && !busy && tab === "upload" && <Upload onAdd={addGame} defaultTeam="塩冶オールスターズ" />}
+      </main>
+    </div>
+  );
+}
+
+function scoreClass(us, them) { return us > them ? "W" : us < them ? "L" : "D"; }
+
+function Scoreboard({ game }) {
+  if (!game) return null;
+  const res = scoreClass(game.ourScore, game.oppScore);
+  const resColor = res === "W" ? T.up : res === "L" ? T.down : T.muted;
+  return (
+    <div style={S.board}>
+      <div style={S.boardSide}>
+        <div style={{ ...S.boardTeam, color: T.us }}>{game.ourTeam}</div>
+        <div style={S.boardScore}>{game.ourScore}</div>
+      </div>
+      <div style={S.boardMid}>
+        <div style={{ ...S.resultPill, color: resColor, borderColor: resColor }}>{res === "W" ? "WIN" : res === "L" ? "LOSE" : "DRAW"}</div>
+        <div style={S.boardDate}>{game.date}</div>
+        {game.ourQ && (
+          <div style={S.qrow}>
+            {["1Q","2Q","3Q","4Q"].map((q, i) => (
+              <div key={q} style={S.qcell}>
+                <div style={S.qlbl}>{q}</div>
+                <div style={{ color: T.us }}>{game.ourQ?.[i] ?? "-"}</div>
+                <div style={{ color: T.them }}>{game.oppQ?.[i] ?? "-"}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div style={{ ...S.boardSide, alignItems: "flex-end" }}>
+        <div style={{ ...S.boardTeam, color: T.them }}>{game.opponent}</div>
+        <div style={S.boardScore}>{game.oppScore}</div>
+      </div>
+    </div>
+  );
+}
+
+function GameList({ games, onOpen, onDate, onDelete }) {
+  if (!games.length) return <div style={S.empty}>まだ試合がありません。「アップロード」から追加してください。</div>;
+  const view = [...games].reverse();
+  return (
+    <div style={S.grid}>
+      {view.map((g) => {
+        const res = scoreClass(g.ourScore, g.oppScore);
+        const c = res === "W" ? T.up : res === "L" ? T.down : T.muted;
+        return (
+          <div key={g.id} style={S.card}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ ...S.resDot, background: c }} />
+              <span style={{ ...S.resTxt, color: c }}>{res === "W" ? "勝ち" : res === "L" ? "負け" : "引分"}</span>
+              <input type="date" value={g.date} onChange={(e) => onDate(g.id, e.target.value)} style={S.dateInput} onClick={(e) => e.stopPropagation()} />
+            </div>
+            <div style={S.cardMatch} onClick={() => onOpen(g.id)}>
+              <span style={{ color: T.us }}>{g.ourTeam}</span>
+              <span style={S.cardScore}>{g.ourScore} <span style={{ color: T.muted }}>-</span> {g.oppScore}</span>
+              <span style={{ color: T.them }}>{g.opponent}</span>
+            </div>
+            <div style={S.cardActions}>
+              <button style={S.ghostBtn} onClick={() => onOpen(g.id)}>詳細を見る</button>
+              <button style={{ ...S.ghostBtn, color: T.down }} onClick={() => { if (confirm("この試合を削除しますか？")) onDelete(g.id); }}>削除</button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function GameDetail({ game, games, onPick }) {
+  if (!game) return <div style={S.empty}>試合を選んでください。</div>;
+  return (
+    <div>
+      <div style={S.pickerRow}>
+        <label style={S.pickLbl}>試合</label>
+        <select value={game.id} onChange={(e) => onPick(e.target.value)} style={S.select}>
+          {[...games].reverse().map((g) => <option key={g.id} value={g.id}>{g.date}　vs {g.opponent}（{g.ourScore}-{g.oppScore}）</option>)}
+        </select>
+      </div>
+      <Scoreboard game={game} />
+      <div style={S.sectionTitle}>チーム比較</div>
+      <div style={S.teamCompare}>
+        {TEAM_ROWS.map((r) => {
+          const a = r.fn(game.ourPlayers), b = r.fn(game.oppPlayers);
+          const na = typeof a === "number", better = na && a !== b ? (a > b) : null;
+          return (
+            <div key={r.label} style={S.tcRow}>
+              <div style={{ ...S.tcVal, color: better === true ? T.up : T.text, textAlign: "right", fontWeight: better === true ? 800 : 600 }}>{a}</div>
+              <div style={S.tcLbl}>{r.label}</div>
+              <div style={{ ...S.tcVal, color: better === false ? T.them : T.text, fontWeight: better === false ? 800 : 600 }}>{b}</div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={S.sectionTitle}>個人スタッツ — <span style={{ color: T.us }}>{game.ourTeam}</span></div>
+      <RosterTable players={game.ourPlayers} accent={T.us} />
+      <div style={{ ...S.sectionTitle, marginTop: 22 }}>個人スタッツ — <span style={{ color: T.them }}>{game.opponent}</span></div>
+      <RosterTable players={game.oppPlayers} accent={T.them} />
+    </div>
+  );
+}
+
+function RosterTable({ players, accent }) {
+  if (!players?.length) return <div style={S.empty}>データなし</div>;
+  const cols = FIELDS.slice(1);
+  return (
+    <div style={S.tableWrap}>
+      <table style={S.table}>
+        <thead><tr>
+          <th style={{ ...S.th, ...S.thName, borderBottomColor: accent }}>選手</th>
+          {cols.map((c) => <th key={c} style={{ ...S.th, borderBottomColor: accent }}>{c}</th>)}
+        </tr></thead>
+        <tbody>
+          {players.map((p, i) => {
+            const team = p.Name === "チーム";
+            return (
+              <tr key={i} style={team ? S.trTeam : undefined}>
+                <td style={{ ...S.td, ...S.tdName, color: team ? T.muted : T.text }}>{p.Name}</td>
+                {cols.map((c) => (
+                  <td key={c} style={{ ...S.td, color: c === "PTS" && !team ? accent : undefined, fontWeight: c === "PTS" && !team ? 800 : 500 }}>
+                    {p[c] === "" ? "-" : p[c]}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function Compare({ games }) {
+  const rev = [...games].reverse();
+  const [aId, setAId] = useState(rev[1]?.id || rev[0]?.id || "");
+  const [bId, setBId] = useState(rev[0]?.id || "");
+  const A = games.find((g) => g.id === aId), B = games.find((g) => g.id === bId);
+  if (games.length < 2) return <div style={S.empty}>比較には2試合以上必要です。</div>;
+  return (
+    <div>
+      <div style={S.pickerRow}>
+        <label style={S.pickLbl}>試合A</label>
+        <select value={aId} onChange={(e) => setAId(e.target.value)} style={S.select}>{rev.map((g) => <option key={g.id} value={g.id}>{g.date} vs {g.opponent}</option>)}</select>
+        <label style={{ ...S.pickLbl, marginLeft: 10 }}>試合B</label>
+        <select value={bId} onChange={(e) => setBId(e.target.value)} style={S.select}>{rev.map((g) => <option key={g.id} value={g.id}>{g.date} vs {g.opponent}</option>)}</select>
+      </div>
+      {A && B && (
+        <>
+          <div style={S.cmpHead}>
+            <div style={{ textAlign: "right" }}>
+              <div style={S.cmpDate}>{A.date}</div><div style={S.cmpVs}>vs {A.opponent}</div>
+              <div style={{ ...S.cmpScore, color: scoreClass(A.ourScore,A.oppScore)==="W"?T.up:T.down }}>{A.ourScore}-{A.oppScore}</div>
+            </div>
+            <div style={S.cmpArrow}>比較</div>
+            <div>
+              <div style={S.cmpDate}>{B.date}</div><div style={S.cmpVs}>vs {B.opponent}</div>
+              <div style={{ ...S.cmpScore, color: scoreClass(B.ourScore,B.oppScore)==="W"?T.up:T.down }}>{B.ourScore}-{B.oppScore}</div>
+            </div>
+          </div>
+          <div style={S.sectionTitle}>チーム集計の差（B − A）</div>
+          <div style={S.teamCompare}>
+            {TREND_STATS.filter((s) => !s.pct).map((s) => {
+              const a = sum(A.ourPlayers, s.key), b = sum(B.ourPlayers, s.key);
+              return (
+                <div key={s.key} style={S.tcRow}>
+                  <div style={{ ...S.tcVal, textAlign: "right" }}>{a}</div>
+                  <div style={S.tcLbl}>{s.label}</div>
+                  <div style={S.tcVal}>{b}</div>
+                  <div style={{ width: 74, textAlign: "right" }}><Delta v={b - a} good={!s.lowerBetter} /></div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={S.sectionTitle}>選手ごとの得点差（両試合に出場）</div>
+          <PlayerDiff A={A} B={B} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function PlayerDiff({ A, B }) {
+  const mapA = new Map(A.ourPlayers.filter(isRealPlayer).map((p) => [p.Name, p]));
+  const rows = B.ourPlayers.filter(isRealPlayer).filter((p) => mapA.has(p.Name)).map((p) => {
+    const a = mapA.get(p.Name);
+    return { name: p.Name, pa: Number(a.PTS)||0, pb: Number(p.PTS)||0, ea: Number(a.EFF)||0, eb: Number(p.EFF)||0 };
+  });
+  if (!rows.length) return <div style={S.empty}>両試合に共通して出場した選手がいません。</div>;
+  return (
+    <div style={S.tableWrap}>
+      <table style={S.table}>
+        <thead><tr>
+          <th style={{ ...S.th, ...S.thName }}>選手</th><th style={S.th}>得点A</th><th style={S.th}>得点B</th><th style={S.th}>差</th>
+          <th style={S.th}>EFF A</th><th style={S.th}>EFF B</th><th style={S.th}>差</th>
+        </tr></thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.name}>
+              <td style={{ ...S.td, ...S.tdName }}>{r.name}</td>
+              <td style={S.td}>{r.pa}</td><td style={S.td}>{r.pb}</td><td style={S.td}><Delta v={r.pb - r.pa} good /></td>
+              <td style={S.td}>{r.ea}</td><td style={S.td}>{r.eb}</td><td style={S.td}><Delta v={r.eb - r.ea} good /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function Delta({ v, good = true }) {
+  if (v === 0 || v == null || Number.isNaN(v)) return <span style={{ color: T.muted }}>—</span>;
+  const positive = v > 0;
+  const isGood = good ? positive : !positive;
+  const color = isGood ? T.up : T.down;
+  return <span style={{ color, fontWeight: 800 }}>{positive ? "▲+" : "▼"}{v}</span>;
+}
+
+// ---- 軽量SVG折れ線チャート（recharts不使用・依存ゼロ） --------------
+function MiniLineChart({ data, keys, colors, pct }) {
+  const W = 720, H = 300, padL = 34, padR = 12, padT = 14, padB = 40;
+  const allVals = data.flatMap((d) => keys.map((k) => d[k]).filter((v) => v != null));
+  const maxV = pct ? 100 : Math.max(4, ...(allVals.length ? allVals : [4]));
+  const n = data.length;
+  const xStep = n > 1 ? (W - padL - padR) / (n - 1) : 0;
+  const x = (i) => padL + i * xStep;
+  const y = (v) => H - padB - (v / (maxV || 1)) * (H - padT - padB);
+  const ticks = 4;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "100%" }}>
+      {Array.from({ length: ticks + 1 }).map((_, i) => {
+        const v = (maxV / ticks) * i;
+        return (
+          <g key={i}>
+            <line x1={padL} x2={W - padR} y1={y(v)} y2={y(v)} stroke={T.line} strokeDasharray="3 3" />
+            <text x={padL - 6} y={y(v) + 3} fontSize="9" fill={T.muted} textAnchor="end">{pct ? `${Math.round(v)}%` : Math.round(v)}</text>
+          </g>
+        );
+      })}
+      {data.map((d, i) => (
+        <text key={i} x={x(i)} y={H - padB + 16} fontSize="9" fill={T.muted} textAnchor="middle">{d.label}</text>
+      ))}
+      {keys.map((k, ki) => {
+        const pts = data.map((d, i) => (d[k] != null ? [x(i), y(d[k])] : null)).filter(Boolean);
+        const path = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0]},${p[1]}`).join(" ");
+        return (
+          <g key={k}>
+            <path d={path} fill="none" stroke={colors[ki % colors.length]} strokeWidth="2.5" />
+            {pts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r="3.2" fill={colors[ki % colors.length]} />)}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function Growth({ games }) {
+  const ordered = [...games];
+  const allNames = useMemo(() => {
+    const s = new Set();
+    ordered.forEach((g) => g.ourPlayers.filter(isRealPlayer).forEach((p) => s.add(p.Name)));
+    return [...s];
+  }, [games]);
+  const [stat, setStat] = useState("PTS");
+  const [selected, setSelected] = useState(() => allNames.slice(0, 2));
+  const statMeta = TREND_STATS.find((s) => s.key === stat);
+
+  const data = useMemo(() => ordered.map((g) => {
+    const row = { label: `${g.date.slice(5)}` };
+    const byName = new Map(g.ourPlayers.filter(isRealPlayer).map((p) => [p.Name, p]));
+    selected.forEach((n) => { const p = byName.get(n); row[n] = p ? statValue(p, stat) : null; });
+    return row;
+  }), [games, stat, selected]);
+
+  function toggle(n) { setSelected((s) => (s.includes(n) ? s.filter((x) => x !== n) : (s.length >= 6 ? s : [...s, n]))); }
+
+  return (
+    <div>
+      <div style={S.sectionTitle}>選手の成長トラッキング</div>
+      <p style={S.note}>選手を選んで、試合をまたいだ成績の推移を見られます（最大6人）。横軸は日付順。</p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+        <label style={S.pickLbl}>指標</label>
+        <select value={stat} onChange={(e) => setStat(e.target.value)} style={S.select}>
+          {TREND_STATS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+        </select>
+      </div>
+      <div style={S.chips}>
+        {allNames.map((n) => {
+          const on = selected.includes(n);
+          const color = LINE_COLORS[selected.indexOf(n) % LINE_COLORS.length] || T.line;
+          return (
+            <button key={n} onClick={() => toggle(n)}
+              style={{ ...S.chip, borderColor: on ? color : T.line, color: on ? "#0E1015" : T.text, background: on ? color : "transparent", fontWeight: on ? 800 : 600 }}>
+              {n}
+            </button>
+          );
+        })}
+      </div>
+      {selected.length === 0 ? <div style={S.empty}>選手を1人以上選んでください。</div> : (
+        <>
+          <div style={{ ...S.panel, height: 320, padding: "10px 6px" }}>
+            <MiniLineChart data={data} keys={selected} colors={LINE_COLORS} pct={!!statMeta?.pct} />
+          </div>
+          <div style={S.sectionTitle}>初戦→最新の変化</div>
+          <div style={S.tableWrap}>
+            <table style={S.table}>
+              <thead><tr>
+                <th style={{ ...S.th, ...S.thName }}>選手</th>
+                {ordered.map((g) => <th key={g.id} style={S.th}>{g.date.slice(5)}</th>)}
+                <th style={S.th}>変化</th>
+              </tr></thead>
+              <tbody>
+                {selected.map((n, i) => {
+                  const vals = ordered.map((g) => { const p = g.ourPlayers.find((x) => x.Name === n); return p ? statValue(p, stat) : null; });
+                  const present = vals.filter((v) => v != null);
+                  const change = present.length >= 2 ? present[present.length - 1] - present[0] : null;
+                  return (
+                    <tr key={n}>
+                      <td style={{ ...S.td, ...S.tdName, color: LINE_COLORS[i % LINE_COLORS.length], fontWeight: 800 }}>{n}</td>
+                      {vals.map((v, j) => <td key={j} style={S.td}>{v == null ? "-" : (statMeta?.pct ? `${v}%` : v)}</td>)}
+                      <td style={S.td}>{change == null ? "—" : <Delta v={change} good={!statMeta?.lowerBetter} />}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---- コート図 ------------------------------------------------------
+function CourtSVG({ shots, onTap, onRemove, mode }) {
+  const ref = useRef(null);
+  const cy = COURT.by + Math.sqrt(COURT.arc3 * COURT.arc3 - Math.pow(COURT.bx - COURT.corner, 2));
+
+  function handleClick(e) {
+    if (!onTap) return;
+    const rect = ref.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * COURT.W;
+    const y = ((e.clientY - rect.top) / rect.height) * COURT.H;
+    if (x < 0 || x > COURT.W || y < 0 || y > COURT.H) return;
+    onTap(x, y);
+  }
+
+  const L = "#5A6273";
+  return (
+    <svg ref={ref} viewBox={`0 0 ${COURT.W} ${COURT.H}`} onClick={handleClick}
+      style={{ width: "100%", height: "auto", background: "#12151C", borderRadius: 12,
+        border: `1px solid ${T.line}`, cursor: onTap ? "crosshair" : "default", touchAction: "manipulation" }}>
+      {/* 外枠 */}
+      <rect x="1" y="1" width={COURT.W - 2} height={COURT.H - 2} fill="none" stroke={L} strokeWidth="2" />
+      {/* ペイントエリア */}
+      <rect x={COURT.paintL} y="0" width={COURT.paintR - COURT.paintL} height={COURT.ftY}
+        fill="#FF7A1A0F" stroke={L} strokeWidth="2" />
+      {/* FTサークル */}
+      <circle cx={COURT.bx} cy={COURT.ftY} r={COURT.ftR} fill="none" stroke={L} strokeWidth="2" />
+      {/* 3Pライン：コーナー直線 + アーク */}
+      <line x1={COURT.corner} y1="0" x2={COURT.corner} y2={cy} stroke={L} strokeWidth="2" />
+      <line x1={COURT.W - COURT.corner} y1="0" x2={COURT.W - COURT.corner} y2={cy} stroke={L} strokeWidth="2" />
+      <path d={`M ${COURT.corner} ${cy} A ${COURT.arc3} ${COURT.arc3} 0 0 0 ${COURT.W - COURT.corner} ${cy}`}
+        fill="none" stroke={L} strokeWidth="2" />
+      {/* ノーチャージセミサークル */}
+      <path d={`M ${COURT.bx - COURT.restrictR} ${COURT.by} A ${COURT.restrictR} ${COURT.restrictR} 0 0 0 ${COURT.bx + COURT.restrictR} ${COURT.by}`}
+        fill="none" stroke={L} strokeWidth="1.5" />
+      {/* バックボードとリング */}
+      <line x1={COURT.bx - 30} y1="32" x2={COURT.bx + 30} y2="32" stroke={L} strokeWidth="3" />
+      <circle cx={COURT.bx} cy={COURT.by} r={COURT.rimR} fill="none" stroke={L} strokeWidth="2" />
+
+      {/* シュートマーカー */}
+      {shots.map((s) => (
+        <g key={s.id} onClick={(e) => { if (mode === "delete" && onRemove) { e.stopPropagation(); onRemove(s.id); } }}
+          style={{ cursor: mode === "delete" ? "pointer" : "default" }}>
+          {s.made ? (
+            <circle cx={s.x} cy={s.y} r="8" fill={T.them} stroke="#0E1015" strokeWidth="1.5" />
+          ) : (
+            <g stroke={T.down} strokeWidth="3.4" strokeLinecap="round">
+              <line x1={s.x - 6} y1={s.y - 6} x2={s.x + 6} y2={s.y + 6} />
+              <line x1={s.x + 6} y1={s.y - 6} x2={s.x - 6} y2={s.y + 6} />
+            </g>
+          )}
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function ShotChart({ games, activeId, onPick, onAddShot, onRemoveShot }) {
+  const game = games.find((g) => g.id === activeId) || null;
+  const [player, setPlayer] = useState("__ALL__");
+  const [made, setMade] = useState(true);
+  const [mode, setMode] = useState("add");
+
+  if (!games.length) return <div style={S.empty}>先に試合を登録してください。</div>;
+  if (!game) return <div style={S.empty}>試合を選んでください。</div>;
+
+  const roster = game.ourPlayers.filter(isRealPlayer).map((p) => p.Name);
+  const allShots = game.shots || [];
+  const shown = player === "__ALL__" ? allShots : allShots.filter((s) => s.player === player);
+
+  const m2 = shown.filter((s) => !s.three && s.made).length;
+  const a2 = shown.filter((s) => !s.three).length;
+  const m3 = shown.filter((s) => s.three && s.made).length;
+  const a3 = shown.filter((s) => s.three).length;
+  const pct = (m, a) => (a ? Math.round((m / a) * 100) + "%" : "-");
+
+  function tap(x, y) {
+    if (mode !== "add") return;
+    if (player === "__ALL__") { alert("先に選手を選んでください。"); return; }
+    onAddShot(game.id, player, x, y, made);
+  }
+
+  return (
+    <div>
+      <div style={S.pickerRow}>
+        <label style={S.pickLbl}>試合</label>
+        <select value={game.id} onChange={(e) => onPick(e.target.value)} style={S.select}>
+          {[...games].reverse().map((g) => <option key={g.id} value={g.id}>{g.date}　vs {g.opponent}</option>)}
+        </select>
+      </div>
+
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
+        {/* 選手リスト */}
+        <div style={{ flex: "1 1 180px", minWidth: 160, maxWidth: 240 }}>
+          <div style={S.playerListWrap}>
+            <button onClick={() => setPlayer("__ALL__")} style={S.playerRow(player === "__ALL__")}>
+              {game.ourTeam}（合計）
+            </button>
+            {roster.map((n) => {
+              const c = allShots.filter((s) => s.player === n).length;
+              return (
+                <button key={n} onClick={() => setPlayer(n)} style={S.playerRow(player === n)}>
+                  <span>{n}</span>
+                  {c > 0 && <span style={{ marginLeft: "auto", fontSize: 11, opacity: 0.75, fontFamily: mono }}>{c}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* コート＋操作 */}
+        <div style={{ flex: "2 1 320px", minWidth: 280 }}>
+          <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <button onClick={() => { setMode("add"); setMade(true); }}
+              style={S.toolBtn(mode === "add" && made, T.them)}>● 成功</button>
+            <button onClick={() => { setMode("add"); setMade(false); }}
+              style={S.toolBtn(mode === "add" && !made, T.down)}>✕ 失敗</button>
+            <button onClick={() => setMode(mode === "delete" ? "add" : "delete")}
+              style={S.toolBtn(mode === "delete", T.gold)}>{mode === "delete" ? "削除モード中" : "削除モード"}</button>
+          </div>
+
+          <CourtSVG shots={shown} onTap={tap} onRemove={onRemoveShot} mode={mode} />
+
+          <p style={{ ...S.note, marginTop: 10 }}>
+            {mode === "delete"
+              ? "コート上のマーカーをタップすると、そのシュートを削除します。"
+              : player === "__ALL__"
+                ? "左の一覧から選手を選ぶと、コートをタップして記録できます。"
+                : `「${player}」の記録中：コートをタップすると${made ? "成功" : "失敗"}として1本追加します。2P/3Pは位置から自動判定します。`}
+          </p>
+
+          {/* 集計 */}
+          <div style={S.shotStats}>
+            <div style={S.ssRow}><span style={S.ssLbl}>2FG</span><span style={S.ssVal}>{m2}/{a2}</span><span style={S.ssPct}>{pct(m2, a2)}</span></div>
+            <div style={S.ssRow}><span style={S.ssLbl}>3FG</span><span style={S.ssVal}>{m3}/{a3}</span><span style={S.ssPct}>{pct(m3, a3)}</span></div>
+            <div style={S.ssRow}><span style={S.ssLbl}>FG</span><span style={S.ssVal}>{m2 + m3}/{a2 + a3}</span><span style={S.ssPct}>{pct(m2 + m3, a2 + a3)}</span></div>
+            <div style={{ ...S.ssRow, borderBottom: "none" }}>
+              <span style={S.ssLbl}>フィールド得点</span>
+              <span style={{ ...S.ssVal, color: T.us, fontWeight: 800 }}>{m2 * 2 + m3 * 3}</span><span style={S.ssPct} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Upload({ onAdd, defaultTeam }) {
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [ourTeam, setOurTeam] = useState(defaultTeam);
+  const [opponent, setOpponent] = useState("");
+  const [ourText, setOurText] = useState("");
+  const [oppText, setOppText] = useState("");
+  const [preview, setPreview] = useState(null);
+  const [err, setErr] = useState("");
+  const fileRef = useRef(null);
+  const fileRefOpp = useRef(null);
+
+  function readFile(file, setter) { const r = new FileReader(); r.onload = () => setter(String(r.result)); r.readAsText(file); }
+  function doPreview() {
+    setErr("");
+    const ourPlayers = parseRoster(ourText);
+    if (!ourPlayers.length) { setErr("自チームのスタッツが読み取れませんでした。ヘッダー行＋選手行を貼り付けてください。"); setPreview(null); return; }
+    setPreview({ ourPlayers, oppPlayers: parseRoster(oppText) });
+  }
+  function doSave() {
+    const ourPlayers = parseRoster(ourText);
+    if (!ourPlayers.length) { setErr("自チームのスタッツが必要です。"); return; }
+    if (!opponent.trim()) { setErr("対戦相手名を入力してください。"); return; }
+    const oppPlayers = parseRoster(oppText);
+    onAdd({ date, ourTeam: ourTeam.trim() || "自チーム", opponent: opponent.trim(),
+      ourScore: computeScore(ourPlayers), oppScore: computeScore(oppPlayers), ourQ: null, oppQ: null, ourPlayers, oppPlayers });
+  }
+
+  return (
+    <div style={{ maxWidth: 860 }}>
+      <div style={S.sectionTitle}>新しい試合を追加</div>
+      <p style={S.note}>baskestats のベーシックスコア表をコピーして貼り付けてください（タブ区切り／CSVどちらも可）。CSVファイルの選択もできます。得点はスタッツから自動計算します。</p>
+      <div style={S.formGrid}>
+        <Field label="試合日"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={S.input} /></Field>
+        <Field label="自チーム名"><input value={ourTeam} onChange={(e) => setOurTeam(e.target.value)} style={S.input} /></Field>
+        <Field label="対戦相手名"><input value={opponent} onChange={(e) => setOpponent(e.target.value)} placeholder="例：三篠" style={S.input} /></Field>
+      </div>
+      <div style={S.uploadBlock}>
+        <div style={S.uploadHead}>
+          <span style={{ color: T.us, fontWeight: 800 }}>自チームのスタッツ</span>
+          <button style={S.ghostBtn} onClick={() => fileRef.current?.click()}>CSVを選択</button>
+          <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" style={{ display: "none" }} onChange={(e) => e.target.files?.[0] && readFile(e.target.files[0], setOurText)} />
+        </div>
+        <textarea value={ourText} onChange={(e) => setOurText(e.target.value)} style={S.textarea} placeholder={"Name\tPTS\tFGA\t…\nリョウ\t17\t9\t…"} />
+      </div>
+      <div style={S.uploadBlock}>
+        <div style={S.uploadHead}>
+          <span style={{ color: T.them, fontWeight: 800 }}>相手チームのスタッツ</span>
+          <span style={{ color: T.muted, fontSize: 12 }}>（任意）</span>
+          <button style={S.ghostBtn} onClick={() => fileRefOpp.current?.click()}>CSVを選択</button>
+          <input ref={fileRefOpp} type="file" accept=".csv,.tsv,.txt" style={{ display: "none" }} onChange={(e) => e.target.files?.[0] && readFile(e.target.files[0], setOppText)} />
+        </div>
+        <textarea value={oppText} onChange={(e) => setOppText(e.target.value)} style={S.textarea} placeholder="相手チームのスタッツ（あれば）" />
+      </div>
+      {err && <div style={S.errBox}>{err}</div>}
+      <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+        <button style={S.ghostBtn} onClick={doPreview}>プレビュー</button>
+        <button style={S.primaryBtn} onClick={doSave}>この試合を保存</button>
+      </div>
+      {preview && (
+        <div style={{ marginTop: 18 }}>
+          <div style={{ ...S.sectionTitle, marginTop: 0 }}>
+            プレビュー — 得点 <span style={{ color: T.us }}>{computeScore(preview.ourPlayers)}</span>
+            {preview.oppPlayers.length ? <> - <span style={{ color: T.them }}>{computeScore(preview.oppPlayers)}</span></> : null}
+          </div>
+          <RosterTable players={preview.ourPlayers} accent={T.us} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return <div style={{ display: "flex", flexDirection: "column", gap: 6 }}><label style={S.pickLbl}>{label}</label>{children}</div>;
+}
+
+const mono = "'SFMono-Regular', ui-monospace, 'Menlo', 'Consolas', monospace";
+const S = {
+  app: { minHeight: "100vh", background: T.ink, color: T.text, fontFamily: "'Hiragino Kaku Gothic ProN', 'Yu Gothic', system-ui, -apple-system, sans-serif" },
+  header: { position: "sticky", top: 0, zIndex: 5, background: "rgba(14,16,21,0.92)", backdropFilter: "blur(8px)", borderBottom: `1px solid ${T.line}`, padding: "14px 18px 0" },
+  brandRow: { display: "flex", alignItems: "center", gap: 12, maxWidth: 1100, margin: "0 auto" },
+  badge: { width: 44, height: 44, borderRadius: 12, background: T.us, color: "#0E1015", fontWeight: 900, fontSize: 15, display: "grid", placeItems: "center", letterSpacing: 0.5, boxShadow: `0 0 0 1px ${T.us}55, 0 6px 18px ${T.us}33` },
+  brandName: { fontSize: 18, fontWeight: 800, letterSpacing: 0.3 },
+  brandSub: { fontSize: 12, color: T.muted, marginTop: 1 },
+  count: { fontFamily: mono, fontSize: 22, fontWeight: 800, color: T.us, lineHeight: 1 },
+  countLbl: { fontSize: 11, color: T.muted },
+  tabs: { display: "flex", gap: 4, maxWidth: 1100, margin: "12px auto 0", overflowX: "auto" },
+  tab: (on) => ({ padding: "9px 14px", border: "none", background: "transparent", cursor: "pointer", color: on ? T.text : T.muted, fontWeight: on ? 800 : 600, fontSize: 14, whiteSpace: "nowrap", borderBottom: `2px solid ${on ? T.us : "transparent"}` }),
+  main: { maxWidth: 1100, margin: "0 auto", padding: "20px 18px 60px" },
+  empty: { padding: "48px 12px", textAlign: "center", color: T.muted },
+  note: { color: T.muted, fontSize: 13, lineHeight: 1.7, margin: "0 0 12px" },
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 },
+  card: { background: T.surface, border: `1px solid ${T.line}`, borderRadius: 14, padding: 14, display: "flex", flexDirection: "column", gap: 10 },
+  resDot: { width: 9, height: 9, borderRadius: "50%" },
+  resTxt: { fontSize: 12, fontWeight: 800 },
+  dateInput: { marginLeft: "auto", background: T.surface2, color: T.text, border: `1px solid ${T.line}`, borderRadius: 8, padding: "3px 6px", fontSize: 12, colorScheme: "dark" },
+  cardMatch: { display: "flex", flexDirection: "column", gap: 3, cursor: "pointer", fontWeight: 700 },
+  cardScore: { fontFamily: mono, fontSize: 26, fontWeight: 800, letterSpacing: 1 },
+  cardActions: { display: "flex", gap: 8, marginTop: 2 },
+  board: { display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 12, alignItems: "center", background: `linear-gradient(180deg, ${T.surface2}, ${T.surface})`, border: `1px solid ${T.line}`, borderRadius: 16, padding: "18px 20px" },
+  boardSide: { display: "flex", flexDirection: "column", gap: 4 },
+  boardTeam: { fontSize: 14, fontWeight: 800 },
+  boardScore: { fontFamily: mono, fontSize: 46, fontWeight: 800, lineHeight: 1 },
+  boardMid: { display: "flex", flexDirection: "column", alignItems: "center", gap: 6, minWidth: 130 },
+  resultPill: { fontSize: 12, fontWeight: 900, letterSpacing: 1, border: "1px solid", borderRadius: 999, padding: "3px 12px" },
+  boardDate: { fontSize: 12, color: T.muted, fontFamily: mono },
+  qrow: { display: "flex", gap: 6, marginTop: 4 },
+  qcell: { fontFamily: mono, fontSize: 12, textAlign: "center", lineHeight: 1.5 },
+  qlbl: { color: T.muted, fontSize: 10 },
+  sectionTitle: { fontSize: 13, fontWeight: 800, color: T.text, letterSpacing: 1, textTransform: "uppercase", margin: "26px 0 12px", paddingLeft: 10, borderLeft: `3px solid ${T.us}` },
+  teamCompare: { background: T.surface, border: `1px solid ${T.line}`, borderRadius: 14, overflow: "hidden" },
+  tcRow: { display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", borderBottom: `1px solid ${T.line}` },
+  tcVal: { fontFamily: mono, fontSize: 15, flex: 1 },
+  tcLbl: { fontSize: 12, color: T.muted, minWidth: 130, textAlign: "center" },
+  tableWrap: { overflowX: "auto", border: `1px solid ${T.line}`, borderRadius: 12, background: T.surface },
+  table: { borderCollapse: "collapse", width: "100%", minWidth: 720, fontFamily: mono, fontSize: 12.5 },
+  th: { padding: "9px 8px", color: T.muted, fontWeight: 700, textAlign: "center", borderBottom: `2px solid ${T.line}`, whiteSpace: "nowrap", position: "sticky", top: 0, background: T.surface },
+  thName: { textAlign: "left", left: 0, position: "sticky", zIndex: 2, background: T.surface, minWidth: 88 },
+  td: { padding: "8px", textAlign: "center", borderBottom: `1px solid ${T.line}`, whiteSpace: "nowrap" },
+  tdName: { textAlign: "left", position: "sticky", left: 0, background: T.surface, fontWeight: 700, zIndex: 1 },
+  trTeam: { background: "#15171d" },
+  pickerRow: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 16 },
+  pickLbl: { fontSize: 12, color: T.muted, fontWeight: 700 },
+  select: { background: T.surface2, color: T.text, border: `1px solid ${T.line}`, borderRadius: 10, padding: "8px 10px", fontSize: 13, maxWidth: "100%" },
+  input: { background: T.surface2, color: T.text, border: `1px solid ${T.line}`, borderRadius: 10, padding: "9px 11px", fontSize: 14, colorScheme: "dark" },
+  cmpHead: { display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 14, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 14, padding: "16px 20px" },
+  cmpDate: { fontFamily: mono, fontSize: 13, color: T.muted },
+  cmpVs: { fontSize: 13, fontWeight: 700, margin: "2px 0" },
+  cmpScore: { fontFamily: mono, fontSize: 26, fontWeight: 800 },
+  cmpArrow: { fontSize: 12, color: T.muted, fontWeight: 800, letterSpacing: 1 },
+  chips: { display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 14 },
+  chip: { padding: "6px 12px", borderRadius: 999, border: "1.5px solid", cursor: "pointer", fontSize: 13 },
+  panel: { background: T.surface, border: `1px solid ${T.line}`, borderRadius: 14 },
+  formGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 },
+  uploadBlock: { marginBottom: 14 },
+  uploadHead: { display: "flex", alignItems: "center", gap: 10, marginBottom: 8 },
+  textarea: { width: "100%", minHeight: 120, background: T.surface2, color: T.text, border: `1px solid ${T.line}`, borderRadius: 12, padding: 12, fontFamily: mono, fontSize: 12.5, resize: "vertical", boxSizing: "border-box" },
+  errBox: { background: "#2a1620", border: `1px solid ${T.down}55`, color: T.down, borderRadius: 10, padding: "10px 14px", fontSize: 13, marginTop: 10 },
+  playerListWrap: { border: `1px solid ${T.line}`, borderRadius: 12, overflow: "hidden", background: T.surface, maxHeight: 460, overflowY: "auto" },
+  playerRow: (on) => ({ display: "flex", alignItems: "center", width: "100%", textAlign: "left",
+    padding: "10px 12px", fontSize: 13, fontWeight: on ? 800 : 600, cursor: "pointer",
+    background: on ? T.us : "transparent", color: on ? "#0E1015" : T.text,
+    border: "none", borderBottom: `1px solid ${T.line}` }),
+  toolBtn: (on, color) => ({ padding: "8px 14px", borderRadius: 999, fontSize: 13, fontWeight: 800,
+    cursor: "pointer", border: `1.5px solid ${on ? color : T.line}`,
+    background: on ? color : "transparent", color: on ? "#0E1015" : T.text }),
+  shotStats: { marginTop: 12, background: T.surface, border: `1px solid ${T.line}`, borderRadius: 12, overflow: "hidden" },
+  ssRow: { display: "flex", alignItems: "center", padding: "9px 14px", borderBottom: `1px solid ${T.line}` },
+  ssLbl: { fontSize: 12, color: T.muted, fontWeight: 700, minWidth: 110 },
+  ssVal: { fontFamily: mono, fontSize: 15, fontWeight: 700 },
+  ssPct: { marginLeft: "auto", fontFamily: mono, fontSize: 14, color: T.muted },
+  ghostBtn: { background: "transparent", color: T.text, border: `1px solid ${T.line}`, borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" },
+  primaryBtn: { background: T.us, color: "#0E1015", border: "none", borderRadius: 10, padding: "9px 20px", fontSize: 14, fontWeight: 800, cursor: "pointer" },
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+
+</script>
+</body>
+</html>
