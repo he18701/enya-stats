@@ -97,19 +97,52 @@
   const TREND_STATS = [
     { key: "PTS", label: "\u5F97\u70B9", pct: false, lowerBetter: false },
     { key: "EFF", label: "\u52B9\u7387(EFF)", pct: false, lowerBetter: false },
+    { key: "2PM", label: "2P\u6210\u529F", pct: false, lowerBetter: false },
+    { key: "2P%", label: "2P\u6210\u529F\u7387", pct: true, lowerBetter: false },
+    { key: "3PM", label: "3P\u6210\u529F", pct: false, lowerBetter: false },
+    { key: "3P%", label: "3P\u6210\u529F\u7387", pct: true, lowerBetter: false },
+    { key: "FTM", label: "FT\u6210\u529F", pct: false, lowerBetter: false },
     { key: "TR", label: "\u30EA\u30D0\u30A6\u30F3\u30C9", pct: false, lowerBetter: false },
+    { key: "OR", label: "\u30AA\u30D5\u30A7\u30F3\u30B9\u30EA\u30D0\u30A6\u30F3\u30C9", pct: false, lowerBetter: false },
+    { key: "DR", label: "\u30C7\u30A3\u30D5\u30A7\u30F3\u30B9\u30EA\u30D0\u30A6\u30F3\u30C9", pct: false, lowerBetter: false },
     { key: "AS", label: "\u30A2\u30B7\u30B9\u30C8", pct: false, lowerBetter: false },
     { key: "ST", label: "\u30B9\u30C6\u30A3\u30FC\u30EB", pct: false, lowerBetter: false },
-    { key: "FGM", label: "FG\u6210\u529F", pct: false, lowerBetter: false },
-    { key: "FG%", label: "FG\u6210\u529F\u7387", pct: true, lowerBetter: false },
-    { key: "TO", label: "\u30BF\u30FC\u30F3\u30AA\u30FC\u30D0\u30FC", pct: false, lowerBetter: true }
+    { key: "BS", label: "\u30D6\u30ED\u30C3\u30AF", pct: false, lowerBetter: false },
+    { key: "TO", label: "\u30BF\u30FC\u30F3\u30AA\u30FC\u30D0\u30FC", pct: false, lowerBetter: true },
+    { key: "F", label: "\u30D5\u30A1\u30FC\u30EB", pct: false, lowerBetter: true }
+  ];
+  const PLAYER_DIFF_COLS = [
+    { key: "PTS", label: "\u5F97\u70B9", lowerBetter: false },
+    { key: "2PM", label: "2P", lowerBetter: false },
+    { key: "3PM", label: "3P", lowerBetter: false },
+    { key: "FTM", label: "FT", lowerBetter: false },
+    { key: "TR", label: "REB", lowerBetter: false },
+    { key: "AS", label: "AST", lowerBetter: false },
+    { key: "ST", label: "STL", lowerBetter: false },
+    { key: "BS", label: "BLK", lowerBetter: false },
+    { key: "TO", label: "TO", lowerBetter: true },
+    { key: "EFF", label: "EFF", lowerBetter: false }
   ];
   const TEAM_ROWS = [
     { label: "\u5F97\u70B9", fn: (p) => sum(p, "PTS") },
-    { label: "FG\u6210\u529F/\u8A66\u6295", fn: (p) => `${sum(p, "FGM")}/${sum(p, "FGA")}` },
+    { label: "2P\u6210\u529F/\u8A66\u6295", fn: (p) => `${sum(p, "2PM")}/${sum(p, "2PA")}` },
+    { label: "2P%", fn: (p) => {
+      const m = sum(p, "2PM"), a = sum(p, "2PA");
+      return a ? `${Math.round(m / a * 100)}%` : "-%";
+    } },
     { label: "3P\u6210\u529F/\u8A66\u6295", fn: (p) => `${sum(p, "3PM")}/${sum(p, "3PA")}` },
+    { label: "3P%", fn: (p) => {
+      const m = sum(p, "3PM"), a = sum(p, "3PA");
+      return a ? `${Math.round(m / a * 100)}%` : "-%";
+    } },
     { label: "FT\u6210\u529F/\u8A66\u6295", fn: (p) => `${sum(p, "FTM")}/${sum(p, "FTA")}` },
-    { label: "\u30EA\u30D0\u30A6\u30F3\u30C9", fn: (p) => sum(p, "TR") },
+    { label: "FT%", fn: (p) => {
+      const m = sum(p, "FTM"), a = sum(p, "FTA");
+      return a ? `${Math.round(m / a * 100)}%` : "-%";
+    } },
+    { label: "\u30AA\u30D5\u30A7\u30F3\u30B9\u30EA\u30D0\u30A6\u30F3\u30C9", fn: (p) => sum(p, "OR") },
+    { label: "\u30C7\u30A3\u30D5\u30A7\u30F3\u30B9\u30EA\u30D0\u30A6\u30F3\u30C9", fn: (p) => sum(p, "DR") },
+    { label: "\u30EA\u30D0\u30A6\u30F3\u30C9(\u5408\u8A08)", fn: (p) => sum(p, "TR") },
     { label: "\u30A2\u30B7\u30B9\u30C8", fn: (p) => sum(p, "AS") },
     { label: "\u30B9\u30C6\u30A3\u30FC\u30EB", fn: (p) => sum(p, "ST") },
     { label: "\u30D6\u30ED\u30C3\u30AF", fn: (p) => sum(p, "BS") },
@@ -401,12 +434,16 @@
   }
   function PlayerDiff({ A, B }) {
     const mapA = new Map(A.ourPlayers.filter(isRealPlayer).map((p) => [p.Name, p]));
-    const rows = B.ourPlayers.filter(isRealPlayer).filter((p) => mapA.has(p.Name)).map((p) => {
-      const a = mapA.get(p.Name);
-      return { name: p.Name, pa: Number(a.PTS) || 0, pb: Number(p.PTS) || 0, ea: Number(a.EFF) || 0, eb: Number(p.EFF) || 0 };
-    });
-    if (!rows.length) return /* @__PURE__ */ React.createElement("div", { style: S.empty }, "\u4E21\u8A66\u5408\u306B\u5171\u901A\u3057\u3066\u51FA\u5834\u3057\u305F\u9078\u624B\u304C\u3044\u307E\u305B\u3093\u3002");
-    return /* @__PURE__ */ React.createElement("div", { style: S.tableWrap }, /* @__PURE__ */ React.createElement("table", { style: S.table }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", { style: { ...S.th, ...S.thName } }, "\u9078\u624B"), /* @__PURE__ */ React.createElement("th", { style: S.th }, "\u5F97\u70B9A"), /* @__PURE__ */ React.createElement("th", { style: S.th }, "\u5F97\u70B9B"), /* @__PURE__ */ React.createElement("th", { style: S.th }, "\u5DEE"), /* @__PURE__ */ React.createElement("th", { style: S.th }, "EFF A"), /* @__PURE__ */ React.createElement("th", { style: S.th }, "EFF B"), /* @__PURE__ */ React.createElement("th", { style: S.th }, "\u5DEE"))), /* @__PURE__ */ React.createElement("tbody", null, rows.map((r) => /* @__PURE__ */ React.createElement("tr", { key: r.name }, /* @__PURE__ */ React.createElement("td", { style: { ...S.td, ...S.tdName } }, r.name), /* @__PURE__ */ React.createElement("td", { style: S.td }, r.pa), /* @__PURE__ */ React.createElement("td", { style: S.td }, r.pb), /* @__PURE__ */ React.createElement("td", { style: S.td }, /* @__PURE__ */ React.createElement(Delta, { v: r.pb - r.pa, good: true })), /* @__PURE__ */ React.createElement("td", { style: S.td }, r.ea), /* @__PURE__ */ React.createElement("td", { style: S.td }, r.eb), /* @__PURE__ */ React.createElement("td", { style: S.td }, /* @__PURE__ */ React.createElement(Delta, { v: r.eb - r.ea, good: true })))))));
+    const players = B.ourPlayers.filter(isRealPlayer).filter((p) => mapA.has(p.Name)).map((p) => ({
+      name: p.Name,
+      a: mapA.get(p.Name),
+      b: p
+    }));
+    if (!players.length) return /* @__PURE__ */ React.createElement("div", { style: S.empty }, "\u4E21\u8A66\u5408\u306B\u5171\u901A\u3057\u3066\u51FA\u5834\u3057\u305F\u9078\u624B\u304C\u3044\u307E\u305B\u3093\u3002");
+    return /* @__PURE__ */ React.createElement("div", { style: S.tableWrap }, /* @__PURE__ */ React.createElement("table", { style: S.table }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", { style: { ...S.th, ...S.thName } }, "\u9078\u624B"), PLAYER_DIFF_COLS.map((c) => /* @__PURE__ */ React.createElement(React.Fragment, { key: c.key }, /* @__PURE__ */ React.createElement("th", { style: S.th }, c.label, " A"), /* @__PURE__ */ React.createElement("th", { style: S.th }, c.label, " B"), /* @__PURE__ */ React.createElement("th", { style: { ...S.th, borderRightWidth: 2 } }, "\u5DEE"))))), /* @__PURE__ */ React.createElement("tbody", null, players.map((r) => /* @__PURE__ */ React.createElement("tr", { key: r.name }, /* @__PURE__ */ React.createElement("td", { style: { ...S.td, ...S.tdName } }, r.name), PLAYER_DIFF_COLS.map((c) => {
+      const va = Number(r.a[c.key]) || 0, vb = Number(r.b[c.key]) || 0;
+      return /* @__PURE__ */ React.createElement(React.Fragment, { key: c.key }, /* @__PURE__ */ React.createElement("td", { style: S.td }, va), /* @__PURE__ */ React.createElement("td", { style: S.td }, vb), /* @__PURE__ */ React.createElement("td", { style: { ...S.td, borderRightWidth: 2 } }, /* @__PURE__ */ React.createElement(Delta, { v: vb - va, good: !c.lowerBetter })));
+    }))))));
   }
   function Delta({ v, good = true }) {
     if (v === 0 || v == null || Number.isNaN(v)) return /* @__PURE__ */ React.createElement("span", { style: { color: T.muted } }, "\u2014");
