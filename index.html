@@ -917,7 +917,7 @@
     return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: S.pickerRow }, /* @__PURE__ */ React.createElement("label", { style: S.pickLbl }, "\u8A66\u5408"), /* @__PURE__ */ React.createElement("select", { value: game.id, onChange: (e) => onPick(e.target.value), style: S.select }, [...games].reverse().map((g) => /* @__PURE__ */ React.createElement("option", { key: g.id, value: g.id }, g.date, "\u3000vs ", g.opponent)))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" } }, /* @__PURE__ */ React.createElement("div", { style: { flex: "1 1 180px", minWidth: 160, maxWidth: 240 } }, /* @__PURE__ */ React.createElement("div", { style: S.playerListWrap }, /* @__PURE__ */ React.createElement("button", { onClick: () => setPlayer("__ALL__"), style: S.playerRow(player === "__ALL__") }, game.ourTeam, "\uFF08\u5408\u8A08\uFF09"), roster.map((n) => {
       const c = allShots.filter((s) => s.player === n).length;
       return /* @__PURE__ */ React.createElement("button", { key: n, onClick: () => setPlayer(n), style: S.playerRow(player === n) }, /* @__PURE__ */ React.createElement("span", null, n), c > 0 && /* @__PURE__ */ React.createElement("span", { style: { marginLeft: "auto", fontSize: 11, opacity: 0.75, fontFamily: mono } }, c));
-    }))), /* @__PURE__ */ React.createElement("div", { style: { flex: "2 1 320px", minWidth: 280 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap", alignItems: "center" } }, mode === "view" ? /* @__PURE__ */ React.createElement("div", { style: { marginLeft: "auto" } }, /* @__PURE__ */ React.createElement(
+    }))), /* @__PURE__ */ React.createElement("div", { style: { flex: "2 1 320px", minWidth: 280 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap", alignItems: "center" } }, mode === "view" ? /* @__PURE__ */ React.createElement(
       "button",
       {
         onClick: () => {
@@ -925,10 +925,10 @@
           if (pw === "enya") setMode("plot");
           else if (pw != null) alert("\u30D1\u30B9\u30EF\u30FC\u30C9\u304C\u9055\u3044\u307E\u3059");
         },
-        style: { ...S.ghostBtn, fontSize: 12 }
+        style: { ...S.ghostBtn, fontSize: 13, width: "100%" }
       },
       "\u2699 \u30D7\u30ED\u30C3\u30C8"
-    )) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(
+    ) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(
       "button",
       {
         onClick: () => setMade(true),
