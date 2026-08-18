@@ -876,6 +876,99 @@
     const [player, setPlayer] = useState("__ALL__");
     const [made, setMade] = useState(true);
     const [mode, setMode] = useState("view");
+    const [importing, setImporting] = useState(false);
+    const [importPreview, setImportPreview] = useState(null);
+    const importRef = useRef(null);
+    function detectShotsFromImage(file) {
+      if (player === "__ALL__") {
+        alert("\u5148\u306B\u9078\u624B\u3092\u9078\u3093\u3067\u304F\u3060\u3055\u3044\u3002");
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        let minX = canvas.width, maxX = 0, minY = canvas.height, maxY = 0;
+        for (let y = 0; y < canvas.height; y++) {
+          for (let x = 0; x < canvas.width; x++) {
+            const i = (y * canvas.width + x) * 4;
+            const r = data[i], g = data[i + 1], b = data[i + 2];
+            if (r < 100 && g < 100 && b < 100) {
+              if (x < minX) minX = x;
+              if (x > maxX) maxX = x;
+              if (y < minY) minY = y;
+              if (y > maxY) maxY = y;
+            }
+          }
+        }
+        const courtW = maxX - minX, courtH = maxY - minY;
+        if (courtW < 50 || courtH < 50) {
+          alert("\u30B3\u30FC\u30C8\u9818\u57DF\u3092\u691C\u51FA\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002");
+          return;
+        }
+        const markers = [];
+        const visited = /* @__PURE__ */ new Set();
+        for (let y = minY; y <= maxY; y++) {
+          for (let x = minX; x <= maxX; x++) {
+            const key = y * canvas.width + x;
+            if (visited.has(key)) continue;
+            const i = key * 4;
+            const r = data[i], g = data[i + 1], b = data[i + 2];
+            let type = null;
+            if (b > 150 && r < 120 && g < 150 && b > r + 40) type = "made";
+            if (r > 180 && g < 100 && b < 100) type = "miss";
+            if (!type) continue;
+            const cluster = [];
+            const queue = [[x, y]];
+            visited.add(key);
+            while (queue.length) {
+              const [cx, cy] = queue.shift();
+              cluster.push([cx, cy]);
+              for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+                const nx = cx + dx, ny = cy + dy;
+                if (nx < minX || nx > maxX || ny < minY || ny > maxY) continue;
+                const nk = ny * canvas.width + nx;
+                if (visited.has(nk)) continue;
+                const ni = nk * 4;
+                const nr = data[ni], ng = data[ni + 1], nb = data[ni + 2];
+                let nt = null;
+                if (nb > 150 && nr < 120 && ng < 150 && nb > nr + 40) nt = "made";
+                if (nr > 180 && ng < 100 && nb < 100) nt = "miss";
+                if (nt === type) {
+                  visited.add(nk);
+                  queue.push([nx, ny]);
+                }
+              }
+            }
+            if (cluster.length < 15) continue;
+            const avgX = cluster.reduce((s, p) => s + p[0], 0) / cluster.length;
+            const avgY = cluster.reduce((s, p) => s + p[1], 0) / cluster.length;
+            const shotX = (avgX - minX) / courtW * COURT.W;
+            const shotY = (avgY - minY) / courtH * COURT.H;
+            markers.push({ x: shotX, y: shotY, made: type === "made", three: isThreePoint(shotX, shotY) });
+          }
+        }
+        if (!markers.length) {
+          alert("\u30B7\u30E5\u30FC\u30C8\u30DE\u30FC\u30AB\u30FC\u3092\u691C\u51FA\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u753B\u50CF\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
+          return;
+        }
+        setImportPreview(markers);
+      };
+      img.src = URL.createObjectURL(file);
+    }
+    async function confirmImport() {
+      if (!importPreview?.length || player === "__ALL__") return;
+      for (const s of importPreview) {
+        await onAddShot(game.id, player, s.x, s.y, s.made);
+      }
+      alert(`${importPreview.length}\u672C\u306E\u30B7\u30E5\u30FC\u30C8\u3092\u30A4\u30F3\u30DD\u30FC\u30C8\u3057\u307E\u3057\u305F\u3002`);
+      setImportPreview(null);
+      setImporting(false);
+    }
     if (!games.length) return /* @__PURE__ */ React.createElement("div", { style: S.empty }, "\u5148\u306B\u8A66\u5408\u3092\u767B\u9332\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
     if (!game) return /* @__PURE__ */ React.createElement("div", { style: S.empty }, "\u8A66\u5408\u3092\u9078\u3093\u3067\u304F\u3060\u3055\u3044\u3002");
     const roster = game.ourPlayers.filter(isRealPlayer).map((p) => p.Name);
@@ -914,7 +1007,7 @@
       { label: "\u30BF\u30FC\u30F3\u30AA\u30FC\u30D0\u30FC", value: sp ? Number(sp.TO) || 0 : "-" },
       { label: "\u30D5\u30A1\u30FC\u30EB", value: sp ? Number(sp.F) || 0 : "-" }
     ];
-    return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: S.pickerRow }, /* @__PURE__ */ React.createElement("label", { style: S.pickLbl }, "\u8A66\u5408"), /* @__PURE__ */ React.createElement("select", { value: game.id, onChange: (e) => onPick(e.target.value), style: S.select }, [...games].reverse().map((g) => /* @__PURE__ */ React.createElement("option", { key: g.id, value: g.id }, g.date, "\u3000vs ", g.opponent)))), mode === "view" ? /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 12 } }, /* @__PURE__ */ React.createElement(
+    return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: S.pickerRow }, /* @__PURE__ */ React.createElement("label", { style: S.pickLbl }, "\u8A66\u5408"), /* @__PURE__ */ React.createElement("select", { value: game.id, onChange: (e) => onPick(e.target.value), style: S.select }, [...games].reverse().map((g) => /* @__PURE__ */ React.createElement("option", { key: g.id, value: g.id }, g.date, "\u3000vs ", g.opponent)))), mode === "view" ? /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(
       "button",
       {
         onClick: () => {
@@ -925,7 +1018,17 @@
         style: { background: T.us, color: "#0E1015", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 14, fontWeight: 800, cursor: "pointer" }
       },
       "\u2699 \u30D7\u30ED\u30C3\u30C8"
-    )) : /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap", alignItems: "center" } }, /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("button", { onClick: () => {
+      if (player === "__ALL__") {
+        alert("\u5148\u306B\u9078\u624B\u3092\u9078\u3093\u3067\u304F\u3060\u3055\u3044\u3002");
+        return;
+      }
+      const pw = prompt("\u30D1\u30B9\u30EF\u30FC\u30C9\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044");
+      if (pw === "enya") {
+        setImporting(true);
+        setImportPreview(null);
+      } else if (pw != null) alert("\u30D1\u30B9\u30EF\u30FC\u30C9\u304C\u9055\u3044\u307E\u3059");
+    }, style: { ...S.ghostBtn, fontSize: 13 } }, "\u{1F4F7} \u30B9\u30AF\u30B7\u30E7\u53D6\u8FBC")) : /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap", alignItems: "center" } }, /* @__PURE__ */ React.createElement(
       "button",
       {
         onClick: () => setMade(true),
@@ -962,7 +1065,29 @@
         style: { ...S.ghostBtn, fontSize: 13 }
       },
       "\u7D42\u4E86"
-    )), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" } }, /* @__PURE__ */ React.createElement("div", { style: { flex: "1 1 180px", minWidth: 160, maxWidth: 240 } }, /* @__PURE__ */ React.createElement("div", { style: S.playerListWrap }, /* @__PURE__ */ React.createElement("button", { onClick: () => setPlayer("__ALL__"), style: S.playerRow(player === "__ALL__") }, game.ourTeam, "\uFF08\u5408\u8A08\uFF09"), roster.map((n) => {
+    )), importing && /* @__PURE__ */ React.createElement("div", { style: { ...S.panel, padding: 14, marginBottom: 12 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 } }, /* @__PURE__ */ React.createElement("span", { style: { fontWeight: 800, fontSize: 14 } }, "\u{1F4F7} \u30B9\u30AF\u30B7\u30E7\u53D6\u8FBC \u2014 ", player), /* @__PURE__ */ React.createElement("button", { onClick: () => {
+      setImporting(false);
+      setImportPreview(null);
+    }, style: { ...S.ghostBtn, fontSize: 12, padding: "4px 10px" } }, "\u2715 \u9589\u3058\u308B")), /* @__PURE__ */ React.createElement("p", { style: S.note }, "baskestats \u306E\u9078\u624B\u5225\u30B7\u30E5\u30FC\u30C8\u30C1\u30E3\u30FC\u30C8\u306E\u30B9\u30AF\u30EA\u30FC\u30F3\u30B7\u30E7\u30C3\u30C8\u3092\u9078\u629E\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u9752\u4E38\uFF08\u6210\u529F\uFF09\u3068\u8D64\xD7\uFF08\u5931\u6557\uFF09\u3092\u81EA\u52D5\u691C\u51FA\u3057\u307E\u3059\u3002"), /* @__PURE__ */ React.createElement(
+      "input",
+      {
+        ref: importRef,
+        type: "file",
+        accept: "image/*",
+        style: { marginBottom: 10 },
+        onChange: (e) => e.target.files?.[0] && detectShotsFromImage(e.target.files[0])
+      }
+    ), importPreview && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { style: { color: T.up, fontWeight: 800, marginBottom: 8 } }, "\u691C\u51FA\u7D50\u679C: \u6210\u529F ", importPreview.filter((s) => s.made).length, "\u672C / \u5931\u6557 ", importPreview.filter((s) => !s.made).length, "\u672C\uFF08\u8A08", importPreview.length, "\u672C\uFF09 \u2014 2P: ", importPreview.filter((s) => !s.three).length, "\u672C / 3P: ", importPreview.filter((s) => s.three).length, "\u672C"), /* @__PURE__ */ React.createElement("div", { style: { maxWidth: 420, marginBottom: 10 } }, /* @__PURE__ */ React.createElement(CourtSVG, { shots: importPreview.map((s, i) => ({ ...s, id: "preview-" + i })), mode: "view" })), /* @__PURE__ */ React.createElement("p", { style: S.note }, "\u4E0A\u306E\u30D7\u30EC\u30D3\u30E5\u30FC\u3092\u78BA\u8A8D\u3057\u3066\u3001\u554F\u984C\u306A\u3051\u308C\u3070\u300C\u30A4\u30F3\u30DD\u30FC\u30C8\u300D\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u8AA4\u691C\u51FA\u306F\u5F8C\u304B\u3089\u30D7\u30ED\u30C3\u30C8\u30E2\u30FC\u30C9\u3067\u4FEE\u6B63\u3067\u304D\u307E\u3059\u3002"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8 } }, /* @__PURE__ */ React.createElement("button", { onClick: confirmImport, style: S.primaryBtn }, "\u30A4\u30F3\u30DD\u30FC\u30C8"), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => {
+          setImportPreview(null);
+          if (importRef.current) importRef.current.value = "";
+        },
+        style: S.ghostBtn
+      },
+      "\u3084\u308A\u76F4\u3057"
+    )))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" } }, /* @__PURE__ */ React.createElement("div", { style: { flex: "1 1 180px", minWidth: 160, maxWidth: 240 } }, /* @__PURE__ */ React.createElement("div", { style: S.playerListWrap }, /* @__PURE__ */ React.createElement("button", { onClick: () => setPlayer("__ALL__"), style: S.playerRow(player === "__ALL__") }, game.ourTeam, "\uFF08\u5408\u8A08\uFF09"), roster.map((n) => {
       const c = allShots.filter((s) => s.player === n).length;
       return /* @__PURE__ */ React.createElement("button", { key: n, onClick: () => setPlayer(n), style: S.playerRow(player === n) }, /* @__PURE__ */ React.createElement("span", null, n), c > 0 && /* @__PURE__ */ React.createElement("span", { style: { marginLeft: "auto", fontSize: 11, opacity: 0.75, fontFamily: mono } }, c));
     }))), /* @__PURE__ */ React.createElement("div", { style: { flex: "2 1 320px", minWidth: 280 } }, /* @__PURE__ */ React.createElement("div", { style: { maxWidth: 420 } }, /* @__PURE__ */ React.createElement(CourtSVG, { shots: shown, onTap: mode === "plot" ? tap : null, onRemove: onRemoveShot, mode })), /* @__PURE__ */ React.createElement("p", { style: { ...S.note, marginTop: 8, fontSize: 12 } }, mode === "view" ? "\u4E0A\u306E\u300C\u2699 \u30D7\u30ED\u30C3\u30C8\u300D\u3067\u30B7\u30E5\u30FC\u30C8\u306E\u8A18\u9332\u30FB\u524A\u9664\u304C\u3067\u304D\u307E\u3059\u3002" : mode === "delete" ? "\u30B3\u30FC\u30C8\u4E0A\u306E\u30DE\u30FC\u30AB\u30FC\u3092\u30BF\u30C3\u30D7\u3067\u524A\u9664\u3002\u300C\u524A\u9664\u300D\u3092\u3082\u3046\u4E00\u5EA6\u62BC\u3059\u3068\u30D7\u30ED\u30C3\u30C8\u306B\u623B\u308A\u307E\u3059\u3002" : player === "__ALL__" ? "\u5DE6\u306E\u4E00\u89A7\u304B\u3089\u9078\u624B\u3092\u9078\u3093\u3067\u304F\u3060\u3055\u3044\u3002" : `\u300C${player}\u300D\u306E\u8A18\u9332\u4E2D\uFF1A\u30B3\u30FC\u30C8\u3092\u30BF\u30C3\u30D7\u3067${made ? "\u6210\u529F" : "\u5931\u6557"}\u3092\u8FFD\u52A0\u30022P/3P\u306F\u81EA\u52D5\u5224\u5B9A\u3002`), /* @__PURE__ */ React.createElement("div", { style: S.shotStatsGrid }, /* @__PURE__ */ React.createElement("div", { style: S.shotStatsCol }, statsLeft.map((s) => /* @__PURE__ */ React.createElement("div", { key: s.label, style: S.ssItem }, /* @__PURE__ */ React.createElement("span", { style: S.ssLbl2 }, s.label), /* @__PURE__ */ React.createElement("span", { style: { ...S.ssVal2, color: s.highlight ? T.us : T.text } }, s.value)))), /* @__PURE__ */ React.createElement("div", { style: S.shotStatsCol }, statsRight.map((s) => /* @__PURE__ */ React.createElement("div", { key: s.label, style: S.ssItem }, /* @__PURE__ */ React.createElement("span", { style: S.ssLbl2 }, s.label), /* @__PURE__ */ React.createElement("span", { style: S.ssVal2 }, s.value))))))));
