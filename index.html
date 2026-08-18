@@ -904,6 +904,7 @@
     const [mode, setMode] = useState("view");
     const [importing, setImporting] = useState(false);
     const [importPreview, setImportPreview] = useState(null);
+    const [rimFound, setRimFound] = useState(false);
     const importRef = useRef(null);
     function detectShotsFromImage(file) {
       if (player === "__ALL__") {
@@ -918,12 +919,19 @@
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0);
         const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-        let minX = canvas.width, maxX = 0, minY = canvas.height, maxY = 0;
-        for (let y = 0; y < canvas.height; y++) {
-          for (let x = 0; x < canvas.width; x++) {
-            const i = (y * canvas.width + x) * 4;
-            const r = data[i], g = data[i + 1], b = data[i + 2];
-            if (r < 100 && g < 100 && b < 100) {
+        const W = canvas.width, H = canvas.height;
+        const px = (x, y) => {
+          const i = (y * W + x) * 4;
+          return [data[i], data[i + 1], data[i + 2]];
+        };
+        const isDark = (x, y) => {
+          const [r, g, b] = px(x, y);
+          return r < 110 && g < 110 && b < 110;
+        };
+        let minX = W, maxX = 0, minY = H, maxY = 0;
+        for (let y = 0; y < H; y++) {
+          for (let x = 0; x < W; x++) {
+            if (isDark(x, y)) {
               if (x < minX) minX = x;
               if (x > maxX) maxX = x;
               if (y < minY) minY = y;
@@ -931,19 +939,67 @@
             }
           }
         }
-        const courtW = maxX - minX, courtH = maxY - minY;
-        if (courtW < 50 || courtH < 50) {
+        const courtPxW = maxX - minX, courtPxH = maxY - minY;
+        if (courtPxW < 50 || courtPxH < 50) {
           alert("\u30B3\u30FC\u30C8\u9818\u57DF\u3092\u691C\u51FA\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002");
           return;
+        }
+        const searchX0 = minX + courtPxW * 0.32, searchX1 = minX + courtPxW * 0.68;
+        const searchY0 = minY, searchY1 = minY + courtPxH * 0.35;
+        const dvisited = /* @__PURE__ */ new Set();
+        let rim = null;
+        for (let y = Math.floor(searchY0); y <= Math.ceil(searchY1); y++) {
+          for (let x = Math.floor(searchX0); x <= Math.ceil(searchX1); x++) {
+            const key = y * W + x;
+            if (dvisited.has(key) || !isDark(x, y)) continue;
+            const pts = [];
+            const queue = [[x, y]];
+            dvisited.add(key);
+            let bx0 = x, bx1 = x, by0 = y, by1 = y;
+            while (queue.length && pts.length < 4e4) {
+              const [cx, cy] = queue.shift();
+              pts.push([cx, cy]);
+              if (cx < bx0) bx0 = cx;
+              if (cx > bx1) bx1 = cx;
+              if (cy < by0) by0 = cy;
+              if (cy > by1) by1 = cy;
+              for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+                const nx = cx + dx, ny = cy + dy;
+                if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+                const nk = ny * W + nx;
+                if (dvisited.has(nk) || !isDark(nx, ny)) continue;
+                dvisited.add(nk);
+                queue.push([nx, ny]);
+              }
+            }
+            const bw = bx1 - bx0 + 1, bh = by1 - by0 + 1;
+            const ratio = bw / bh;
+            if (bw > courtPxW * 0.012 && bw < courtPxW * 0.075 && ratio > 0.65 && ratio < 1.55 && pts.length > 8) {
+              const cand = { x: (bx0 + bx1) / 2, y: (by0 + by1) / 2, size: bw };
+              if (!rim || Math.abs(cand.x - (minX + courtPxW / 2)) < Math.abs(rim.x - (minX + courtPxW / 2))) rim = cand;
+            }
+          }
+        }
+        const scale = COURT.W / courtPxW;
+        let originPxX, originPxY, originAppX, originAppY;
+        if (rim) {
+          originPxX = rim.x;
+          originPxY = rim.y;
+          originAppX = COURT.bx;
+          originAppY = COURT.by;
+        } else {
+          originPxX = minX + courtPxW / 2;
+          originPxY = minY;
+          originAppX = COURT.bx;
+          originAppY = 0;
         }
         const markers = [];
         const visited = /* @__PURE__ */ new Set();
         for (let y = minY; y <= maxY; y++) {
           for (let x = minX; x <= maxX; x++) {
-            const key = y * canvas.width + x;
+            const key = y * W + x;
             if (visited.has(key)) continue;
-            const i = key * 4;
-            const r = data[i], g = data[i + 1], b = data[i + 2];
+            const [r, g, b] = px(x, y);
             let type = null;
             if (b > 150 && r < 120 && g < 150 && b > r + 40) type = "made";
             if (r > 180 && g < 100 && b < 100) type = "miss";
@@ -957,10 +1013,9 @@
               for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) {
                 const nx = cx + dx, ny = cy + dy;
                 if (nx < minX || nx > maxX || ny < minY || ny > maxY) continue;
-                const nk = ny * canvas.width + nx;
+                const nk = ny * W + nx;
                 if (visited.has(nk)) continue;
-                const ni = nk * 4;
-                const nr = data[ni], ng = data[ni + 1], nb = data[ni + 2];
+                const [nr, ng, nb] = px(nx, ny);
                 let nt = null;
                 if (nb > 150 && nr < 120 && ng < 150 && nb > nr + 40) nt = "made";
                 if (nr > 180 && ng < 100 && nb < 100) nt = "miss";
@@ -973,8 +1028,8 @@
             if (cluster.length < 15) continue;
             const avgX = cluster.reduce((s, p) => s + p[0], 0) / cluster.length;
             const avgY = cluster.reduce((s, p) => s + p[1], 0) / cluster.length;
-            const shotX = (avgX - minX) / courtW * COURT.W;
-            const shotY = (avgY - minY) / courtH * COURT.H;
+            const shotX = originAppX + (avgX - originPxX) * scale;
+            const shotY = originAppY + (avgY - originPxY) * scale;
             markers.push({ x: shotX, y: shotY, made: type === "made", three: isThreePoint(shotX, shotY) });
           }
         }
@@ -983,6 +1038,7 @@
           return;
         }
         setImportPreview(markers);
+        setRimFound(!!rim);
       };
       img.src = URL.createObjectURL(file);
     }
@@ -1103,7 +1159,7 @@
         style: { marginBottom: 10 },
         onChange: (e) => e.target.files?.[0] && detectShotsFromImage(e.target.files[0])
       }
-    ), importPreview && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { style: { color: T.up, fontWeight: 800, marginBottom: 8 } }, "\u691C\u51FA\u7D50\u679C: \u6210\u529F ", importPreview.filter((s) => s.made).length, "\u672C / \u5931\u6557 ", importPreview.filter((s) => !s.made).length, "\u672C\uFF08\u8A08", importPreview.length, "\u672C\uFF09 \u2014 2P: ", importPreview.filter((s) => !s.three).length, "\u672C / 3P: ", importPreview.filter((s) => s.three).length, "\u672C"), /* @__PURE__ */ React.createElement("div", { style: { maxWidth: 420, marginBottom: 10 } }, /* @__PURE__ */ React.createElement(CourtSVG, { shots: importPreview.map((s, i) => ({ ...s, id: "preview-" + i })), mode: "view" })), /* @__PURE__ */ React.createElement("p", { style: S.note }, "\u4E0A\u306E\u30D7\u30EC\u30D3\u30E5\u30FC\u3092\u78BA\u8A8D\u3057\u3066\u3001\u554F\u984C\u306A\u3051\u308C\u3070\u300C\u30A4\u30F3\u30DD\u30FC\u30C8\u300D\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u8AA4\u691C\u51FA\u306F\u5F8C\u304B\u3089\u30D7\u30ED\u30C3\u30C8\u30E2\u30FC\u30C9\u3067\u4FEE\u6B63\u3067\u304D\u307E\u3059\u3002"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8 } }, /* @__PURE__ */ React.createElement("button", { onClick: confirmImport, style: S.primaryBtn }, "\u30A4\u30F3\u30DD\u30FC\u30C8"), /* @__PURE__ */ React.createElement(
+    ), importPreview && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("p", { style: { color: T.up, fontWeight: 800, marginBottom: 4 } }, "\u691C\u51FA\u7D50\u679C: \u6210\u529F ", importPreview.filter((s) => s.made).length, "\u672C / \u5931\u6557 ", importPreview.filter((s) => !s.made).length, "\u672C\uFF08\u8A08", importPreview.length, "\u672C\uFF09 \u2014 2P: ", importPreview.filter((s) => !s.three).length, "\u672C / 3P: ", importPreview.filter((s) => s.three).length, "\u672C"), /* @__PURE__ */ React.createElement("p", { style: { fontSize: 12, color: rimFound ? T.muted : T.gold, marginBottom: 8 } }, rimFound ? "\u2713 \u30EA\u30F3\u30B0\u3092\u57FA\u6E96\u306B\u4F4D\u7F6E\u3092\u5408\u308F\u305B\u307E\u3057\u305F\u3002" : "\u26A0 \u30EA\u30F3\u30B0\u3092\u691C\u51FA\u3067\u304D\u305A\u3001\u30A8\u30F3\u30C9\u30E9\u30A4\u30F3\u57FA\u6E96\u3067\u914D\u7F6E\u3057\u3066\u3044\u307E\u3059\u3002\u4F4D\u7F6E\u304C\u305A\u308C\u308B\u5834\u5408\u304C\u3042\u308A\u307E\u3059\u3002"), /* @__PURE__ */ React.createElement("div", { style: { maxWidth: 420, marginBottom: 10 } }, /* @__PURE__ */ React.createElement(CourtSVG, { shots: importPreview.map((s, i) => ({ ...s, id: "preview-" + i })), mode: "view" })), /* @__PURE__ */ React.createElement("p", { style: S.note }, "\u4E0A\u306E\u30D7\u30EC\u30D3\u30E5\u30FC\u3092\u78BA\u8A8D\u3057\u3066\u3001\u554F\u984C\u306A\u3051\u308C\u3070\u300C\u30A4\u30F3\u30DD\u30FC\u30C8\u300D\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u8AA4\u691C\u51FA\u306F\u5F8C\u304B\u3089\u30D7\u30ED\u30C3\u30C8\u30E2\u30FC\u30C9\u3067\u4FEE\u6B63\u3067\u304D\u307E\u3059\u3002"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8 } }, /* @__PURE__ */ React.createElement("button", { onClick: confirmImport, style: S.primaryBtn }, "\u30A4\u30F3\u30DD\u30FC\u30C8"), /* @__PURE__ */ React.createElement(
       "button",
       {
         onClick: () => {
