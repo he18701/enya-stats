@@ -362,6 +362,9 @@
   async function updateGameDate(id, date) {
     await sb.from("games").update({ match_date: date }).eq("id", id);
   }
+  async function updateGameTeams(id, ourTeam, opponent) {
+    await sb.from("games").update({ our_team: ourTeam, opponent }).eq("id", id);
+  }
   async function deleteGameRemote(id) {
     await sb.from("games").delete().eq("id", id);
   }
@@ -461,6 +464,10 @@
       await updateGameDate(id, date);
       await refresh(activeId);
     }
+    async function patchTeams(id, ourTeam, opponent) {
+      await updateGameTeams(id, ourTeam, opponent);
+      await refresh(activeId);
+    }
     async function addShot(gameId, player, x, y, made) {
       const temp = { id: "tmp-" + Math.random(), player, x, y, made, three: isThreePoint(x, y) };
       setGames((gs) => gs.map((g) => g.id === gameId ? { ...g, shots: [...g.shots || [], temp] } : g));
@@ -523,9 +530,7 @@
       { id: "growth", label: "\u9078\u624B\u306E\u6210\u9577" }
     ];
     function openUpload() {
-      const pw = prompt("\u30D1\u30B9\u30EF\u30FC\u30C9\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044");
-      if (pw === "enya") setTab("upload");
-      else if (pw != null) alert("\u30D1\u30B9\u30EF\u30FC\u30C9\u304C\u9055\u3044\u307E\u3059");
+      setTab("upload");
     }
     const touchStart = useRef({ x: 0, y: 0 });
     function onTouchStart(e) {
@@ -556,7 +561,7 @@
     )), /* @__PURE__ */ React.createElement("button", { onClick: openUpload, style: { ...S.tab(tab === "upload"), marginLeft: "auto", fontSize: 11, opacity: 0.6 } }, "\uFF0B"))), /* @__PURE__ */ React.createElement("main", { style: S.main, onTouchStart, onTouchEnd }, !ready && /* @__PURE__ */ React.createElement("div", { style: S.empty }, "\u8AAD\u307F\u8FBC\u307F\u4E2D\u2026"), ready && busy && /* @__PURE__ */ React.createElement("div", { style: S.empty }, "\u4FDD\u5B58\u4E2D\u2026"), ready && !busy && tab === "games" && /* @__PURE__ */ React.createElement(GameList, { games, onOpen: (id) => {
       setActiveId(id);
       setTab("detail");
-    }, onDate: patchDate, onDelete: deleteGame, onMove: moveGame }), ready && !busy && tab === "detail" && /* @__PURE__ */ React.createElement(GameDetail, { game: activeGame, games, onPick: setActiveId, onUpdateStats: handleUpdateStats }), ready && !busy && tab === "shots" && /* @__PURE__ */ React.createElement(ShotChart, { games, activeId, onPick: setActiveId, onAddShot: addShot, onRemoveShot: removeShot, onSyncShots: handleSyncShots, onMoveShot: moveShot }), ready && !busy && tab === "compare" && /* @__PURE__ */ React.createElement(Compare, { games }), ready && !busy && tab === "growth" && /* @__PURE__ */ React.createElement(Growth, { games }), ready && !busy && tab === "upload" && /* @__PURE__ */ React.createElement(Upload, { onAdd: addGame, defaultTeam: "\u5869\u51B6\u30AA\u30FC\u30EB\u30B9\u30BF\u30FC\u30BA" })));
+    }, onDate: patchDate, onDelete: deleteGame, onMove: moveGame, onTeams: patchTeams }), ready && !busy && tab === "detail" && /* @__PURE__ */ React.createElement(GameDetail, { game: activeGame, games, onPick: setActiveId, onUpdateStats: handleUpdateStats }), ready && !busy && tab === "shots" && /* @__PURE__ */ React.createElement(ShotChart, { games, activeId, onPick: setActiveId, onAddShot: addShot, onRemoveShot: removeShot, onSyncShots: handleSyncShots, onMoveShot: moveShot }), ready && !busy && tab === "compare" && /* @__PURE__ */ React.createElement(Compare, { games }), ready && !busy && tab === "growth" && /* @__PURE__ */ React.createElement(Growth, { games }), ready && !busy && tab === "upload" && /* @__PURE__ */ React.createElement(Upload, { onAdd: addGame, defaultTeam: "\u5869\u51B6\u30AA\u30FC\u30EB\u30B9\u30BF\u30FC\u30BA" })));
   }
   function scoreClass(us, them) {
     return us > them ? "W" : us < them ? "L" : "D";
@@ -567,12 +572,10 @@
     const resColor = res === "W" ? T.up : res === "L" ? T.down : T.muted;
     return /* @__PURE__ */ React.createElement("div", { style: S.board }, /* @__PURE__ */ React.createElement("div", { style: S.boardSide }, /* @__PURE__ */ React.createElement("div", { style: { ...S.boardTeam, color: T.us } }, game.ourTeam), /* @__PURE__ */ React.createElement("div", { style: S.boardScore }, game.ourScore)), /* @__PURE__ */ React.createElement("div", { style: S.boardMid }, /* @__PURE__ */ React.createElement("div", { style: { ...S.resultPill, color: resColor, borderColor: resColor } }, res === "W" ? "WIN" : res === "L" ? "LOSE" : "DRAW"), /* @__PURE__ */ React.createElement("div", { style: S.boardDate }, game.date), game.ourQ && /* @__PURE__ */ React.createElement("div", { style: S.qrow }, ["1Q", "2Q", "3Q", "4Q"].map((q, i) => /* @__PURE__ */ React.createElement("div", { key: q, style: S.qcell }, /* @__PURE__ */ React.createElement("div", { style: S.qlbl }, q), /* @__PURE__ */ React.createElement("div", { style: { color: T.us } }, game.ourQ?.[i] ?? "-"), /* @__PURE__ */ React.createElement("div", { style: { color: T.them } }, game.oppQ?.[i] ?? "-"))))), /* @__PURE__ */ React.createElement("div", { style: { ...S.boardSide, alignItems: "flex-end" } }, /* @__PURE__ */ React.createElement("div", { style: { ...S.boardTeam, color: T.them } }, game.opponent), /* @__PURE__ */ React.createElement("div", { style: S.boardScore }, game.oppScore)));
   }
-  function GameList({ games, onOpen, onDate, onDelete, onMove }) {
+  function GameList({ games, onOpen, onDate, onDelete, onMove, onTeams }) {
     const [editMode, setEditMode] = useState(false);
     function enterEdit() {
-      const pw = prompt("\u30D1\u30B9\u30EF\u30FC\u30C9\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044");
-      if (pw === "enya") setEditMode(true);
-      else if (pw != null) alert("\u30D1\u30B9\u30EF\u30FC\u30C9\u304C\u9055\u3044\u307E\u3059");
+      setEditMode(true);
     }
     if (!games.length) return /* @__PURE__ */ React.createElement("div", { style: S.empty }, "\u307E\u3060\u8A66\u5408\u304C\u3042\u308A\u307E\u305B\u3093\u3002\u300C\u30A2\u30C3\u30D7\u30ED\u30FC\u30C9\u300D\u304B\u3089\u8FFD\u52A0\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
     const view = [...games].reverse();
@@ -580,7 +583,23 @@
       const res = scoreClass(g.ourScore, g.oppScore);
       const c = res === "W" ? T.up : res === "L" ? T.down : T.muted;
       const realIdx = games.indexOf(g);
-      return /* @__PURE__ */ React.createElement("div", { key: g.id, style: S.card }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } }, /* @__PURE__ */ React.createElement("span", { style: { ...S.resDot, background: c } }), /* @__PURE__ */ React.createElement("span", { style: { ...S.resTxt, color: c } }, res === "W" ? "\u52DD\u3061" : res === "L" ? "\u8CA0\u3051" : "\u5F15\u5206"), editMode ? /* @__PURE__ */ React.createElement("input", { type: "date", value: g.date, onChange: (e) => onDate(g.id, e.target.value), style: S.dateInput, onClick: (e) => e.stopPropagation() }) : /* @__PURE__ */ React.createElement("span", { style: { marginLeft: "auto", fontSize: 12, color: T.muted, fontFamily: mono } }, g.date)), /* @__PURE__ */ React.createElement("div", { style: S.cardMatch, onClick: () => onOpen(g.id) }, /* @__PURE__ */ React.createElement("span", { style: { color: T.us } }, g.ourTeam), /* @__PURE__ */ React.createElement("span", { style: S.cardScore }, g.ourScore, " ", /* @__PURE__ */ React.createElement("span", { style: { color: T.muted } }, "-"), " ", g.oppScore), /* @__PURE__ */ React.createElement("span", { style: { color: T.them } }, g.opponent)), /* @__PURE__ */ React.createElement("div", { style: S.cardActions }, /* @__PURE__ */ React.createElement("button", { style: S.ghostBtn, onClick: () => onOpen(g.id) }, "\u8A73\u7D30\u3092\u898B\u308B"), editMode && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { style: { ...S.ghostBtn, padding: "8px 10px", fontSize: 12 }, onClick: () => {
+      return /* @__PURE__ */ React.createElement("div", { key: g.id, style: S.card }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } }, /* @__PURE__ */ React.createElement("span", { style: { ...S.resDot, background: c } }), /* @__PURE__ */ React.createElement("span", { style: { ...S.resTxt, color: c } }, res === "W" ? "\u52DD\u3061" : res === "L" ? "\u8CA0\u3051" : "\u5F15\u5206"), editMode ? /* @__PURE__ */ React.createElement("input", { type: "date", value: g.date, onChange: (e) => onDate(g.id, e.target.value), style: S.dateInput, onClick: (e) => e.stopPropagation() }) : /* @__PURE__ */ React.createElement("span", { style: { marginLeft: "auto", fontSize: 12, color: T.muted, fontFamily: mono } }, g.date)), editMode ? /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6 } }, /* @__PURE__ */ React.createElement(
+        "input",
+        {
+          value: g.ourTeam,
+          onChange: (e) => onTeams(g.id, e.target.value, g.opponent),
+          style: { ...S.input, fontSize: 13, padding: "6px 9px", color: T.us, fontWeight: 700 },
+          placeholder: "\u81EA\u30C1\u30FC\u30E0\u540D"
+        }
+      ), /* @__PURE__ */ React.createElement("span", { style: S.cardScore }, g.ourScore, " ", /* @__PURE__ */ React.createElement("span", { style: { color: T.muted } }, "-"), " ", g.oppScore), /* @__PURE__ */ React.createElement(
+        "input",
+        {
+          value: g.opponent,
+          onChange: (e) => onTeams(g.id, g.ourTeam, e.target.value),
+          style: { ...S.input, fontSize: 13, padding: "6px 9px", color: T.them, fontWeight: 700 },
+          placeholder: "\u5BFE\u6226\u76F8\u624B\u540D"
+        }
+      )) : /* @__PURE__ */ React.createElement("div", { style: S.cardMatch, onClick: () => onOpen(g.id) }, /* @__PURE__ */ React.createElement("span", { style: { color: T.us } }, g.ourTeam), /* @__PURE__ */ React.createElement("span", { style: S.cardScore }, g.ourScore, " ", /* @__PURE__ */ React.createElement("span", { style: { color: T.muted } }, "-"), " ", g.oppScore), /* @__PURE__ */ React.createElement("span", { style: { color: T.them } }, g.opponent)), /* @__PURE__ */ React.createElement("div", { style: S.cardActions }, /* @__PURE__ */ React.createElement("button", { style: S.ghostBtn, onClick: () => onOpen(g.id) }, "\u8A73\u7D30\u3092\u898B\u308B"), editMode && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { style: { ...S.ghostBtn, padding: "8px 10px", fontSize: 12 }, onClick: () => {
         if (confirm("\u9806\u756A\u3092\u5909\u66F4\u3057\u307E\u3059\u304B\uFF1F")) onMove(g.id, -1);
       }, disabled: realIdx === 0 }, "\u25B2"), /* @__PURE__ */ React.createElement("button", { style: { ...S.ghostBtn, padding: "8px 10px", fontSize: 12 }, onClick: () => {
         if (confirm("\u9806\u756A\u3092\u5909\u66F4\u3057\u307E\u3059\u304B\uFF1F")) onMove(g.id, 1);
@@ -595,9 +614,7 @@
     const [editOppText, setEditOppText] = useState("");
     const [editErr, setEditErr] = useState("");
     function enterEdit() {
-      const pw = prompt("\u30D1\u30B9\u30EF\u30FC\u30C9\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044");
-      if (pw === "enya") setEditing(true);
-      else if (pw != null) alert("\u30D1\u30B9\u30EF\u30FC\u30C9\u304C\u9055\u3044\u307E\u3059");
+      setEditing(true);
     }
     async function saveOur() {
       setEditErr("");
@@ -1117,11 +1134,7 @@
     return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: S.pickerRow }, /* @__PURE__ */ React.createElement("label", { style: S.pickLbl }, "\u8A66\u5408"), /* @__PURE__ */ React.createElement("select", { value: game.id, onChange: (e) => onPick(e.target.value), style: S.select }, [...games].reverse().map((g) => /* @__PURE__ */ React.createElement("option", { key: g.id, value: g.id }, g.date, "\u3000vs ", g.opponent)))), mode === "view" ? /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap", justifyContent: "flex-end" } }, /* @__PURE__ */ React.createElement(
       "button",
       {
-        onClick: () => {
-          const pw = prompt("\u30D1\u30B9\u30EF\u30FC\u30C9\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044");
-          if (pw === "enya") setMode("plot");
-          else if (pw != null) alert("\u30D1\u30B9\u30EF\u30FC\u30C9\u304C\u9055\u3044\u307E\u3059");
-        },
+        onClick: () => setMode("plot"),
         style: { background: T.us, color: "#0E1015", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 800, cursor: "pointer" }
       },
       "\u2699 \u30D7\u30ED\u30C3\u30C8"
@@ -1130,11 +1143,8 @@
         alert("\u5148\u306B\u9078\u624B\u3092\u9078\u3093\u3067\u304F\u3060\u3055\u3044\u3002");
         return;
       }
-      const pw = prompt("\u30D1\u30B9\u30EF\u30FC\u30C9\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044");
-      if (pw === "enya") {
-        setImporting(true);
-        setImportPreview(null);
-      } else if (pw != null) alert("\u30D1\u30B9\u30EF\u30FC\u30C9\u304C\u9055\u3044\u307E\u3059");
+      setImporting(true);
+      setImportPreview(null);
     }, style: { ...S.ghostBtn, fontSize: 12, padding: "5px 12px" } }, "\u{1F4F7} \u53D6\u8FBC")) : /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap", alignItems: "center" } }, /* @__PURE__ */ React.createElement(
       "button",
       {
