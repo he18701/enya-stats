@@ -573,7 +573,7 @@
       setEditMode(true);
     }
     if (!games.length) return /* @__PURE__ */ React.createElement("div", { style: S.empty }, "\u307E\u3060\u8A66\u5408\u304C\u3042\u308A\u307E\u305B\u3093\u3002\u300C\u30A2\u30C3\u30D7\u30ED\u30FC\u30C9\u300D\u304B\u3089\u8FFD\u52A0\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
-    const tournaments = [...new Set(games.map((g) => g.tournament).filter(Boolean))];
+    const tournaments = [...new Set([...games].reverse().map((g) => g.tournament).filter(Boolean))];
     const untagged = games.some((g) => !g.tournament);
     const filterOptions = [...tournaments, ...untagged ? ["__NONE__"] : []];
     const view = [...games].reverse().filter((g) => {
@@ -794,7 +794,7 @@
     const [gameIds, setGameIds] = useState(() => ordered.map((g) => g.id));
     const [tFilter, setTFilter] = useState("__ALL__");
     const filtered = useMemo(() => ordered.filter((g) => gameIds.includes(g.id)), [games, gameIds]);
-    const tournaments = useMemo(() => [...new Set(ordered.map((g) => g.tournament).filter(Boolean))], [ordered]);
+    const tournaments = useMemo(() => [...new Set([...ordered].reverse().map((g) => g.tournament).filter(Boolean))], [ordered]);
     const hasUntagged = ordered.some((g) => !g.tournament);
     const visibleGames = useMemo(() => ordered.filter((g) => {
       if (tFilter === "__ALL__") return true;
