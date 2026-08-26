@@ -302,6 +302,7 @@
       ourQ: g.our_q,
       oppQ: g.opp_q,
       sortOrder: g.sort_order || 0,
+      tournament: g.tournament || "",
       ourPlayers: g.player_stats.filter((r) => r.side === "us").map(rowToPlayer),
       oppPlayers: g.player_stats.filter((r) => r.side === "opp").map(rowToPlayer),
       shots: (g.shots || []).map((s) => ({
@@ -343,7 +344,8 @@
       our_score: game.ourScore,
       opp_score: game.oppScore,
       our_q: game.ourQ,
-      opp_q: game.oppQ
+      opp_q: game.oppQ,
+      tournament: game.tournament || ""
     }).select().single();
     if (error) {
       alert("\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F: " + error.message);
@@ -361,6 +363,9 @@
   }
   async function updateGameDate(id, date) {
     await sb.from("games").update({ match_date: date }).eq("id", id);
+  }
+  async function updateGameTournament(id, tournament) {
+    await sb.from("games").update({ tournament }).eq("id", id);
   }
   async function updateGameTeams(id, ourTeam, opponent) {
     await sb.from("games").update({ our_team: ourTeam, opponent }).eq("id", id);
@@ -468,6 +473,10 @@
       await updateGameTeams(id, ourTeam, opponent);
       await refresh(activeId);
     }
+    async function patchTournament(id, tournament) {
+      await updateGameTournament(id, tournament);
+      await refresh(activeId);
+    }
     async function addShot(gameId, player, x, y, made) {
       const temp = { id: "tmp-" + Math.random(), player, x, y, made, three: isThreePoint(x, y) };
       setGames((gs) => gs.map((g) => g.id === gameId ? { ...g, shots: [...g.shots || [], temp] } : g));
@@ -546,7 +555,7 @@
     )), /* @__PURE__ */ React.createElement("button", { onClick: openUpload, style: { ...S.tab(tab === "upload"), marginLeft: "auto", fontSize: 11, opacity: 0.6 } }, "\uFF0B"))), /* @__PURE__ */ React.createElement("main", { style: S.main }, !ready && /* @__PURE__ */ React.createElement("div", { style: S.empty }, "\u8AAD\u307F\u8FBC\u307F\u4E2D\u2026"), ready && busy && /* @__PURE__ */ React.createElement("div", { style: S.empty }, "\u4FDD\u5B58\u4E2D\u2026"), ready && !busy && tab === "games" && /* @__PURE__ */ React.createElement(GameList, { games, onOpen: (id) => {
       setActiveId(id);
       setTab("detail");
-    }, onDate: patchDate, onDelete: deleteGame, onMove: moveGame, onTeams: patchTeams }), ready && !busy && tab === "detail" && /* @__PURE__ */ React.createElement(GameDetail, { game: activeGame, games, onPick: setActiveId, onUpdateStats: handleUpdateStats }), ready && !busy && tab === "shots" && /* @__PURE__ */ React.createElement(ShotChart, { games, activeId, onPick: setActiveId, onAddShot: addShot, onRemoveShot: removeShot, onSyncShots: handleSyncShots, onMoveShot: moveShot }), ready && !busy && tab === "compare" && /* @__PURE__ */ React.createElement(Compare, { games }), ready && !busy && tab === "growth" && /* @__PURE__ */ React.createElement(Growth, { games }), ready && !busy && tab === "upload" && /* @__PURE__ */ React.createElement(Upload, { onAdd: addGame, defaultTeam: "\u5869\u51B6\u30AA\u30FC\u30EB\u30B9\u30BF\u30FC\u30BA" })));
+    }, onDate: patchDate, onDelete: deleteGame, onMove: moveGame, onTeams: patchTeams, onTournament: patchTournament }), ready && !busy && tab === "detail" && /* @__PURE__ */ React.createElement(GameDetail, { game: activeGame, games, onPick: setActiveId, onUpdateStats: handleUpdateStats }), ready && !busy && tab === "shots" && /* @__PURE__ */ React.createElement(ShotChart, { games, activeId, onPick: setActiveId, onAddShot: addShot, onRemoveShot: removeShot, onSyncShots: handleSyncShots, onMoveShot: moveShot }), ready && !busy && tab === "compare" && /* @__PURE__ */ React.createElement(Compare, { games }), ready && !busy && tab === "growth" && /* @__PURE__ */ React.createElement(Growth, { games }), ready && !busy && tab === "upload" && /* @__PURE__ */ React.createElement(Upload, { onAdd: addGame, defaultTeam: "\u5869\u51B6\u30AA\u30FC\u30EB\u30B9\u30BF\u30FC\u30BA" })));
   }
   function scoreClass(us, them) {
     return us > them ? "W" : us < them ? "L" : "D";
@@ -557,18 +566,34 @@
     const resColor = res === "W" ? T.up : res === "L" ? T.down : T.muted;
     return /* @__PURE__ */ React.createElement("div", { style: S.board }, /* @__PURE__ */ React.createElement("div", { style: S.boardSide }, /* @__PURE__ */ React.createElement("div", { style: { ...S.boardTeam, color: T.us } }, game.ourTeam), /* @__PURE__ */ React.createElement("div", { style: S.boardScore }, game.ourScore)), /* @__PURE__ */ React.createElement("div", { style: S.boardMid }, /* @__PURE__ */ React.createElement("div", { style: { ...S.resultPill, color: resColor, borderColor: resColor } }, res === "W" ? "WIN" : res === "L" ? "LOSE" : "DRAW"), /* @__PURE__ */ React.createElement("div", { style: S.boardDate }, game.date), game.ourQ && /* @__PURE__ */ React.createElement("div", { style: S.qrow }, ["1Q", "2Q", "3Q", "4Q"].map((q, i) => /* @__PURE__ */ React.createElement("div", { key: q, style: S.qcell }, /* @__PURE__ */ React.createElement("div", { style: S.qlbl }, q), /* @__PURE__ */ React.createElement("div", { style: { color: T.us } }, game.ourQ?.[i] ?? "-"), /* @__PURE__ */ React.createElement("div", { style: { color: T.them } }, game.oppQ?.[i] ?? "-"))))), /* @__PURE__ */ React.createElement("div", { style: { ...S.boardSide, alignItems: "flex-end" } }, /* @__PURE__ */ React.createElement("div", { style: { ...S.boardTeam, color: T.them } }, game.opponent), /* @__PURE__ */ React.createElement("div", { style: S.boardScore }, game.oppScore)));
   }
-  function GameList({ games, onOpen, onDate, onDelete, onMove, onTeams }) {
+  function GameList({ games, onOpen, onDate, onDelete, onMove, onTeams, onTournament }) {
     const [editMode, setEditMode] = useState(false);
+    const [filterT, setFilterT] = useState("__ALL__");
     function enterEdit() {
       setEditMode(true);
     }
     if (!games.length) return /* @__PURE__ */ React.createElement("div", { style: S.empty }, "\u307E\u3060\u8A66\u5408\u304C\u3042\u308A\u307E\u305B\u3093\u3002\u300C\u30A2\u30C3\u30D7\u30ED\u30FC\u30C9\u300D\u304B\u3089\u8FFD\u52A0\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
-    const view = [...games].reverse();
-    return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "flex-end", marginBottom: 10 } }, editMode ? /* @__PURE__ */ React.createElement("button", { onClick: () => setEditMode(false), style: { ...S.ghostBtn, fontSize: 12 } }, "\u2713 \u7DE8\u96C6\u3092\u7D42\u4E86") : /* @__PURE__ */ React.createElement("button", { onClick: enterEdit, style: { ...S.ghostBtn, fontSize: 12, padding: "6px 10px" } }, "\u2699 \u7DE8\u96C6")), /* @__PURE__ */ React.createElement("div", { style: S.grid }, view.map((g, vi) => {
+    const tournaments = [...new Set(games.map((g) => g.tournament).filter(Boolean))];
+    const untagged = games.some((g) => !g.tournament);
+    const filterOptions = [...tournaments, ...untagged ? ["__NONE__"] : []];
+    const view = [...games].reverse().filter((g) => {
+      if (filterT === "__ALL__") return true;
+      if (filterT === "__NONE__") return !g.tournament;
+      return g.tournament === filterT;
+    });
+    function renderCard(g) {
       const res = scoreClass(g.ourScore, g.oppScore);
       const c = res === "W" ? T.up : res === "L" ? T.down : T.muted;
       const realIdx = games.indexOf(g);
       return /* @__PURE__ */ React.createElement("div", { key: g.id, style: S.card }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } }, /* @__PURE__ */ React.createElement("span", { style: { ...S.resDot, background: c } }), /* @__PURE__ */ React.createElement("span", { style: { ...S.resTxt, color: c } }, res === "W" ? "\u52DD\u3061" : res === "L" ? "\u8CA0\u3051" : "\u5F15\u5206"), editMode ? /* @__PURE__ */ React.createElement("input", { type: "date", value: g.date, onChange: (e) => onDate(g.id, e.target.value), style: S.dateInput, onClick: (e) => e.stopPropagation() }) : /* @__PURE__ */ React.createElement("span", { style: { marginLeft: "auto", fontSize: 12, color: T.muted, fontFamily: mono } }, g.date)), editMode ? /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6 } }, /* @__PURE__ */ React.createElement(
+        "input",
+        {
+          value: g.tournament || "",
+          onChange: (e) => onTournament(g.id, e.target.value),
+          style: { ...S.input, fontSize: 12, padding: "5px 9px", color: T.gold },
+          placeholder: "\u5927\u4F1A\u540D\uFF08\u4F8B\uFF1A\u590F\u5B63\u30C8\u30FC\u30CA\u30E1\u30F3\u30C8\uFF09"
+        }
+      ), /* @__PURE__ */ React.createElement(
         "input",
         {
           value: g.ourTeam,
@@ -584,14 +609,15 @@
           style: { ...S.input, fontSize: 13, padding: "6px 9px", color: T.them, fontWeight: 700 },
           placeholder: "\u5BFE\u6226\u76F8\u624B\u540D"
         }
-      )) : /* @__PURE__ */ React.createElement("div", { style: S.cardMatch, onClick: () => onOpen(g.id) }, /* @__PURE__ */ React.createElement("span", { style: { color: T.us } }, g.ourTeam), /* @__PURE__ */ React.createElement("span", { style: S.cardScore }, g.ourScore, " ", /* @__PURE__ */ React.createElement("span", { style: { color: T.muted } }, "-"), " ", g.oppScore), /* @__PURE__ */ React.createElement("span", { style: { color: T.them } }, g.opponent)), /* @__PURE__ */ React.createElement("div", { style: S.cardActions }, /* @__PURE__ */ React.createElement("button", { style: S.ghostBtn, onClick: () => onOpen(g.id) }, "\u8A73\u7D30\u3092\u898B\u308B"), editMode && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { style: { ...S.ghostBtn, padding: "8px 10px", fontSize: 12 }, onClick: () => {
+      )) : /* @__PURE__ */ React.createElement("div", { style: S.cardMatch, onClick: () => onOpen(g.id) }, g.tournament && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11, color: T.gold, fontWeight: 700 } }, g.tournament), /* @__PURE__ */ React.createElement("span", { style: { color: T.us } }, g.ourTeam), /* @__PURE__ */ React.createElement("span", { style: S.cardScore }, g.ourScore, " ", /* @__PURE__ */ React.createElement("span", { style: { color: T.muted } }, "-"), " ", g.oppScore), /* @__PURE__ */ React.createElement("span", { style: { color: T.them } }, g.opponent)), /* @__PURE__ */ React.createElement("div", { style: S.cardActions }, /* @__PURE__ */ React.createElement("button", { style: S.ghostBtn, onClick: () => onOpen(g.id) }, "\u8A73\u7D30\u3092\u898B\u308B"), editMode && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { style: { ...S.ghostBtn, padding: "8px 10px", fontSize: 12 }, onClick: () => {
         if (confirm("\u9806\u756A\u3092\u5909\u66F4\u3057\u307E\u3059\u304B\uFF1F")) onMove(g.id, -1);
       }, disabled: realIdx === 0 }, "\u25B2"), /* @__PURE__ */ React.createElement("button", { style: { ...S.ghostBtn, padding: "8px 10px", fontSize: 12 }, onClick: () => {
         if (confirm("\u9806\u756A\u3092\u5909\u66F4\u3057\u307E\u3059\u304B\uFF1F")) onMove(g.id, 1);
       }, disabled: realIdx === games.length - 1 }, "\u25BC"), /* @__PURE__ */ React.createElement("button", { style: { ...S.ghostBtn, color: T.down }, onClick: () => {
         if (confirm("\u3053\u306E\u8A66\u5408\u3092\u524A\u9664\u3057\u307E\u3059\u304B\uFF1F")) onDelete(g.id);
       } }, "\u524A\u9664"))));
-    })));
+    }
+    return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 } }, filterOptions.length > 0 ? /* @__PURE__ */ React.createElement("select", { value: filterT, onChange: (e) => setFilterT(e.target.value), style: S.select }, /* @__PURE__ */ React.createElement("option", { value: "__ALL__" }, "\u3059\u3079\u3066\u306E\u5927\u4F1A"), tournaments.map((t) => /* @__PURE__ */ React.createElement("option", { key: t, value: t }, t)), untagged && /* @__PURE__ */ React.createElement("option", { value: "__NONE__" }, "\u5927\u4F1A\u672A\u8A2D\u5B9A")) : /* @__PURE__ */ React.createElement("div", null), editMode ? /* @__PURE__ */ React.createElement("button", { onClick: () => setEditMode(false), style: { ...S.ghostBtn, fontSize: 12 } }, "\u2713 \u7DE8\u96C6\u3092\u7D42\u4E86") : /* @__PURE__ */ React.createElement("button", { onClick: enterEdit, style: { ...S.ghostBtn, fontSize: 12, padding: "6px 10px" } }, "\u2699 \u7DE8\u96C6")), /* @__PURE__ */ React.createElement("div", { style: S.grid }, view.map(renderCard)));
   }
   function GameDetail({ game, games, onPick, onUpdateStats }) {
     const [editing, setEditing] = useState(false);
@@ -629,7 +655,7 @@
     }
     if (!game) return /* @__PURE__ */ React.createElement("div", { style: S.empty }, "\u8A66\u5408\u3092\u9078\u3093\u3067\u304F\u3060\u3055\u3044\u3002");
     const isIncomplete = !game.oppPlayers?.length || game.ourPlayers.filter(isRealPlayer).every((p) => (Number(p.TR) || 0) === 0 && (Number(p.AS) || 0) === 0 && (Number(p.ST) || 0) === 0);
-    return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: S.pickerRow }, /* @__PURE__ */ React.createElement("label", { style: S.pickLbl }, "\u8A66\u5408"), /* @__PURE__ */ React.createElement("select", { value: game.id, onChange: (e) => onPick(e.target.value), style: S.select }, [...games].reverse().map((g) => /* @__PURE__ */ React.createElement("option", { key: g.id, value: g.id }, g.date, "\u3000vs ", g.opponent, "\uFF08", g.ourScore, "-", g.oppScore, "\uFF09")))), /* @__PURE__ */ React.createElement(Scoreboard, { game }), /* @__PURE__ */ React.createElement("div", { style: S.sectionTitle }, "\u30C1\u30FC\u30E0\u6BD4\u8F03"), /* @__PURE__ */ React.createElement("div", { style: S.teamCompare }, TEAM_ROWS.map((r) => {
+    return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: S.pickerRow }, /* @__PURE__ */ React.createElement("label", { style: S.pickLbl }, "\u8A66\u5408"), /* @__PURE__ */ React.createElement("select", { value: game.id, onChange: (e) => onPick(e.target.value), style: S.select }, [...games].reverse().map((g) => /* @__PURE__ */ React.createElement("option", { key: g.id, value: g.id }, g.tournament ? `[${g.tournament}] ` : "", g.date, "\u3000vs ", g.opponent, "\uFF08", g.ourScore, "-", g.oppScore, "\uFF09")))), game.tournament && /* @__PURE__ */ React.createElement("div", { style: { color: T.gold, fontSize: 13, fontWeight: 700, marginBottom: 8 } }, game.tournament), /* @__PURE__ */ React.createElement(Scoreboard, { game }), /* @__PURE__ */ React.createElement("div", { style: S.sectionTitle }, "\u30C1\u30FC\u30E0\u6BD4\u8F03"), /* @__PURE__ */ React.createElement("div", { style: S.teamCompare }, TEAM_ROWS.map((r) => {
       const a = r.fn(game.ourPlayers), b = r.fn(game.oppPlayers);
       const na = typeof a === "number", better = na && a !== b ? a > b : null;
       return /* @__PURE__ */ React.createElement("div", { key: r.label, style: S.tcRow }, /* @__PURE__ */ React.createElement("div", { style: { ...S.tcVal, color: better === true ? T.up : T.text, textAlign: "right", fontWeight: better === true ? 800 : 600 } }, a), /* @__PURE__ */ React.createElement("div", { style: S.tcLbl }, r.label), /* @__PURE__ */ React.createElement("div", { style: { ...S.tcVal, color: better === false ? T.them : T.text, fontWeight: better === false ? 800 : 600 } }, b));
@@ -731,7 +757,15 @@
   function Growth({ games }) {
     const ordered = [...games];
     const [gameIds, setGameIds] = useState(() => ordered.map((g) => g.id));
+    const [tFilter, setTFilter] = useState("__ALL__");
     const filtered = useMemo(() => ordered.filter((g) => gameIds.includes(g.id)), [games, gameIds]);
+    const tournaments = useMemo(() => [...new Set(ordered.map((g) => g.tournament).filter(Boolean))], [ordered]);
+    const hasUntagged = ordered.some((g) => !g.tournament);
+    const visibleGames = useMemo(() => ordered.filter((g) => {
+      if (tFilter === "__ALL__") return true;
+      if (tFilter === "__NONE__") return !g.tournament;
+      return g.tournament === tFilter;
+    }), [ordered, tFilter]);
     const allNames = useMemo(() => {
       const s = /* @__PURE__ */ new Set();
       filtered.forEach((g) => g.ourPlayers.filter(isRealPlayer).forEach((p) => s.add(p.Name)));
@@ -780,12 +814,13 @@
       setGameIds((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
     }
     function selectAllGames() {
-      setGameIds(ordered.map((g) => g.id));
+      setGameIds([.../* @__PURE__ */ new Set([...gameIds, ...visibleGames.map((g) => g.id)])]);
     }
     function clearAllGames() {
-      setGameIds([]);
+      const visIds = new Set(visibleGames.map((g) => g.id));
+      setGameIds(gameIds.filter((id) => !visIds.has(id)));
     }
-    return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: S.sectionTitle }, "\u9078\u624B\u306E\u6210\u9577\u30C8\u30E9\u30C3\u30AD\u30F3\u30B0"), /* @__PURE__ */ React.createElement("p", { style: S.note }, "\u6BD4\u8F03\u3057\u305F\u3044\u8A66\u5408\u3068\u9078\u624B\u3092\u9078\u3093\u3067\u3001\u6210\u7E3E\u306E\u63A8\u79FB\u3092\u898B\u3089\u308C\u307E\u3059\uFF08\u9078\u624B\u306F\u6700\u59276\u4EBA\uFF09\u3002"), /* @__PURE__ */ React.createElement("div", { style: S.sectionTitle }, "\u5BFE\u8C61\u306E\u8A66\u5408"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 8 } }, /* @__PURE__ */ React.createElement("button", { onClick: selectAllGames, style: { ...S.ghostBtn, fontSize: 12, padding: "5px 10px" } }, "\u5168\u9078\u629E"), /* @__PURE__ */ React.createElement("button", { onClick: clearAllGames, style: { ...S.ghostBtn, fontSize: 12, padding: "5px 10px" } }, "\u5168\u89E3\u9664")), /* @__PURE__ */ React.createElement("div", { style: S.chips }, ordered.map((g) => {
+    return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: S.sectionTitle }, "\u9078\u624B\u306E\u6210\u9577\u30C8\u30E9\u30C3\u30AD\u30F3\u30B0"), /* @__PURE__ */ React.createElement("p", { style: S.note }, "\u6BD4\u8F03\u3057\u305F\u3044\u8A66\u5408\u3068\u9078\u624B\u3092\u9078\u3093\u3067\u3001\u6210\u7E3E\u306E\u63A8\u79FB\u3092\u898B\u3089\u308C\u307E\u3059\uFF08\u9078\u624B\u306F\u6700\u59276\u4EBA\uFF09\u3002"), tournaments.length > 0 && /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 10 } }, /* @__PURE__ */ React.createElement("label", { style: S.pickLbl }, "\u5927\u4F1A\u3067\u7D5E\u308A\u8FBC\u307F"), /* @__PURE__ */ React.createElement("select", { value: tFilter, onChange: (e) => setTFilter(e.target.value), style: { ...S.select, marginLeft: 8 } }, /* @__PURE__ */ React.createElement("option", { value: "__ALL__" }, "\u3059\u3079\u3066\u306E\u5927\u4F1A"), tournaments.map((t) => /* @__PURE__ */ React.createElement("option", { key: t, value: t }, t)), hasUntagged && /* @__PURE__ */ React.createElement("option", { value: "__NONE__" }, "\u5927\u4F1A\u672A\u8A2D\u5B9A"))), /* @__PURE__ */ React.createElement("div", { style: S.sectionTitle }, "\u5BFE\u8C61\u306E\u8A66\u5408"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 8 } }, /* @__PURE__ */ React.createElement("button", { onClick: selectAllGames, style: { ...S.ghostBtn, fontSize: 12, padding: "5px 10px" } }, "\u8868\u793A\u4E2D\u3092\u5168\u9078\u629E"), /* @__PURE__ */ React.createElement("button", { onClick: clearAllGames, style: { ...S.ghostBtn, fontSize: 12, padding: "5px 10px" } }, "\u8868\u793A\u4E2D\u3092\u5168\u89E3\u9664")), /* @__PURE__ */ React.createElement("div", { style: S.chips }, visibleGames.map((g) => {
       const on = gameIds.includes(g.id);
       const res = scoreClass(g.ourScore, g.oppScore);
       const resC = res === "W" ? T.up : res === "L" ? T.down : T.muted;
@@ -1220,6 +1255,7 @@
   function Upload({ onAdd, defaultTeam }) {
     const [uploadMode, setUploadMode] = useState("full");
     const [date, setDate] = useState((/* @__PURE__ */ new Date()).toISOString().slice(0, 10));
+    const [tournament, setTournament] = useState("");
     const [ourTeam, setOurTeam] = useState(defaultTeam);
     const [opponent, setOpponent] = useState("");
     const [rosterText, setRosterText] = useState("");
@@ -1255,6 +1291,7 @@
       });
       onAdd({
         date,
+        tournament: tournament.trim(),
         ourTeam: ourTeam.trim() || "\u81EA\u30C1\u30FC\u30E0",
         opponent: opponent.trim(),
         ourScore: 0,
@@ -1288,6 +1325,7 @@
       const oppPlayers = parseRoster(oppText);
       onAdd({
         date,
+        tournament: tournament.trim(),
         ourTeam: ourTeam.trim() || "\u81EA\u30C1\u30FC\u30E0",
         opponent: opponent.trim(),
         ourScore: computeScore(ourPlayers),
@@ -1301,7 +1339,7 @@
     return /* @__PURE__ */ React.createElement("div", { style: { maxWidth: 860 } }, /* @__PURE__ */ React.createElement("div", { style: S.sectionTitle }, "\u65B0\u3057\u3044\u8A66\u5408\u3092\u8FFD\u52A0"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 16 } }, /* @__PURE__ */ React.createElement(
       "button",
       {
-        onClick: () => setUploadMode("simple"),
+        onClick: () => setUploadMode("full"),
         style: S.toolBtn(uploadMode === "full", T.us)
       },
       "\u30B9\u30BF\u30C3\u30C4\u4ED8\u304D\u767B\u9332"
@@ -1312,7 +1350,7 @@
         style: S.toolBtn(uploadMode === "simple", T.us)
       },
       "\u7C21\u6613\u767B\u9332"
-    )), /* @__PURE__ */ React.createElement("div", { style: S.formGrid }, /* @__PURE__ */ React.createElement(Field, { label: "\u8A66\u5408\u65E5" }, /* @__PURE__ */ React.createElement("input", { type: "date", value: date, onChange: (e) => setDate(e.target.value), style: S.input })), /* @__PURE__ */ React.createElement(Field, { label: "\u81EA\u30C1\u30FC\u30E0\u540D" }, /* @__PURE__ */ React.createElement("input", { value: ourTeam, onChange: (e) => setOurTeam(e.target.value), style: S.input })), /* @__PURE__ */ React.createElement(Field, { label: "\u5BFE\u6226\u76F8\u624B\u540D" }, /* @__PURE__ */ React.createElement("input", { value: opponent, onChange: (e) => setOpponent(e.target.value), placeholder: "\u4F8B\uFF1A\u4E09\u7BE0", style: S.input }))), uploadMode === "simple" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("p", { style: S.note }, "\u5BFE\u6226\u76F8\u624B\u540D\u3092\u5165\u308C\u3066\u4FDD\u5B58\u3059\u308B\u3060\u3051\u3002\u30B7\u30E5\u30FC\u30C8\u30C1\u30E3\u30FC\u30C8\u304B\u3089\u30B7\u30E5\u30FC\u30C8\u3092\u8A18\u9332\u3067\u304D\u307E\u3059\u3002\u30E1\u30F3\u30D0\u30FC\u306F\u4E0B\u306E\u30EA\u30B9\u30C8\u3092\u7DE8\u96C6\u3067\u304D\u307E\u3059\uFF081\u884C1\u540D\uFF09\u3002"), /* @__PURE__ */ React.createElement("div", { style: S.uploadBlock }, /* @__PURE__ */ React.createElement("div", { style: S.uploadHead }, /* @__PURE__ */ React.createElement("span", { style: { color: T.us, fontWeight: 800 } }, "\u30E1\u30F3\u30D0\u30FC\u4E00\u89A7"), /* @__PURE__ */ React.createElement("span", { style: { color: T.muted, fontSize: 12 } }, "\uFF081\u884C\u306B1\u4EBA\uFF09")), /* @__PURE__ */ React.createElement("textarea", { value: rosterText || DEFAULT_ROSTER, onChange: (e) => setRosterText(e.target.value), style: { ...S.textarea, minHeight: 180 } })), err && /* @__PURE__ */ React.createElement("div", { style: S.errBox }, err), /* @__PURE__ */ React.createElement("button", { style: S.primaryBtn, onClick: doSimpleSave }, "\u3053\u306E\u8A66\u5408\u3092\u4FDD\u5B58")) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("p", { style: S.note }, "baskestats \u306E\u30D9\u30FC\u30B7\u30C3\u30AF\u30B9\u30B3\u30A2\u8868\u3092\u30B3\u30D4\u30FC\u3057\u3066\u8CBC\u308A\u4ED8\u3051\u3066\u304F\u3060\u3055\u3044\uFF08\u30BF\u30D6\u533A\u5207\u308A\uFF0FCSV\u3069\u3061\u3089\u3082\u53EF\uFF09\u3002"), /* @__PURE__ */ React.createElement("div", { style: S.uploadBlock }, /* @__PURE__ */ React.createElement("div", { style: S.uploadHead }, /* @__PURE__ */ React.createElement("span", { style: { color: T.us, fontWeight: 800 } }, "\u81EA\u30C1\u30FC\u30E0\u306E\u30B9\u30BF\u30C3\u30C4"), /* @__PURE__ */ React.createElement("button", { style: S.ghostBtn, onClick: () => fileRef.current?.click() }, "CSV\u3092\u9078\u629E"), /* @__PURE__ */ React.createElement("input", { ref: fileRef, type: "file", accept: ".csv,.tsv,.txt", style: { display: "none" }, onChange: (e) => e.target.files?.[0] && readFile(e.target.files[0], setOurText) })), /* @__PURE__ */ React.createElement("textarea", { value: ourText, onChange: (e) => setOurText(e.target.value), style: S.textarea, placeholder: "Name	PTS	FGA	\u2026\n\u30EA\u30E7\u30A6	17	9	\u2026" })), /* @__PURE__ */ React.createElement("div", { style: S.uploadBlock }, /* @__PURE__ */ React.createElement("div", { style: S.uploadHead }, /* @__PURE__ */ React.createElement("span", { style: { color: T.them, fontWeight: 800 } }, "\u76F8\u624B\u30C1\u30FC\u30E0\u306E\u30B9\u30BF\u30C3\u30C4"), /* @__PURE__ */ React.createElement("span", { style: { color: T.muted, fontSize: 12 } }, "\uFF08\u4EFB\u610F\uFF09"), /* @__PURE__ */ React.createElement("button", { style: S.ghostBtn, onClick: () => fileRefOpp.current?.click() }, "CSV\u3092\u9078\u629E"), /* @__PURE__ */ React.createElement("input", { ref: fileRefOpp, type: "file", accept: ".csv,.tsv,.txt", style: { display: "none" }, onChange: (e) => e.target.files?.[0] && readFile(e.target.files[0], setOppText) })), /* @__PURE__ */ React.createElement("textarea", { value: oppText, onChange: (e) => setOppText(e.target.value), style: S.textarea, placeholder: "\u76F8\u624B\u30C1\u30FC\u30E0\u306E\u30B9\u30BF\u30C3\u30C4\uFF08\u3042\u308C\u3070\uFF09" })), err && /* @__PURE__ */ React.createElement("div", { style: S.errBox }, err), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10, marginTop: 8 } }, /* @__PURE__ */ React.createElement("button", { style: S.ghostBtn, onClick: doPreview }, "\u30D7\u30EC\u30D3\u30E5\u30FC"), /* @__PURE__ */ React.createElement("button", { style: S.primaryBtn, onClick: doSave }, "\u3053\u306E\u8A66\u5408\u3092\u4FDD\u5B58")), preview && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 18 } }, /* @__PURE__ */ React.createElement("div", { style: { ...S.sectionTitle, marginTop: 0 } }, "\u30D7\u30EC\u30D3\u30E5\u30FC \u2014 \u5F97\u70B9 ", /* @__PURE__ */ React.createElement("span", { style: { color: T.us } }, computeScore(preview.ourPlayers)), preview.oppPlayers.length ? /* @__PURE__ */ React.createElement(React.Fragment, null, " - ", /* @__PURE__ */ React.createElement("span", { style: { color: T.them } }, computeScore(preview.oppPlayers))) : null), /* @__PURE__ */ React.createElement(RosterTable, { players: preview.ourPlayers, accent: T.us }))));
+    )), /* @__PURE__ */ React.createElement("div", { style: S.formGrid }, /* @__PURE__ */ React.createElement(Field, { label: "\u8A66\u5408\u65E5" }, /* @__PURE__ */ React.createElement("input", { type: "date", value: date, onChange: (e) => setDate(e.target.value), style: S.input })), /* @__PURE__ */ React.createElement(Field, { label: "\u5927\u4F1A\u540D\uFF08\u4EFB\u610F\uFF09" }, /* @__PURE__ */ React.createElement("input", { value: tournament, onChange: (e) => setTournament(e.target.value), placeholder: "\u4F8B\uFF1A\u590F\u5B63\u30C8\u30FC\u30CA\u30E1\u30F3\u30C8", style: S.input })), /* @__PURE__ */ React.createElement(Field, { label: "\u81EA\u30C1\u30FC\u30E0\u540D" }, /* @__PURE__ */ React.createElement("input", { value: ourTeam, onChange: (e) => setOurTeam(e.target.value), style: S.input })), /* @__PURE__ */ React.createElement(Field, { label: "\u5BFE\u6226\u76F8\u624B\u540D" }, /* @__PURE__ */ React.createElement("input", { value: opponent, onChange: (e) => setOpponent(e.target.value), placeholder: "\u4F8B\uFF1A\u4E09\u7BE0", style: S.input }))), uploadMode === "simple" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("p", { style: S.note }, "\u5BFE\u6226\u76F8\u624B\u540D\u3092\u5165\u308C\u3066\u4FDD\u5B58\u3059\u308B\u3060\u3051\u3002\u30B7\u30E5\u30FC\u30C8\u30C1\u30E3\u30FC\u30C8\u304B\u3089\u30B7\u30E5\u30FC\u30C8\u3092\u8A18\u9332\u3067\u304D\u307E\u3059\u3002\u30E1\u30F3\u30D0\u30FC\u306F\u4E0B\u306E\u30EA\u30B9\u30C8\u3092\u7DE8\u96C6\u3067\u304D\u307E\u3059\uFF081\u884C1\u540D\uFF09\u3002"), /* @__PURE__ */ React.createElement("div", { style: S.uploadBlock }, /* @__PURE__ */ React.createElement("div", { style: S.uploadHead }, /* @__PURE__ */ React.createElement("span", { style: { color: T.us, fontWeight: 800 } }, "\u30E1\u30F3\u30D0\u30FC\u4E00\u89A7"), /* @__PURE__ */ React.createElement("span", { style: { color: T.muted, fontSize: 12 } }, "\uFF081\u884C\u306B1\u4EBA\uFF09")), /* @__PURE__ */ React.createElement("textarea", { value: rosterText || DEFAULT_ROSTER, onChange: (e) => setRosterText(e.target.value), style: { ...S.textarea, minHeight: 180 } })), err && /* @__PURE__ */ React.createElement("div", { style: S.errBox }, err), /* @__PURE__ */ React.createElement("button", { style: S.primaryBtn, onClick: doSimpleSave }, "\u3053\u306E\u8A66\u5408\u3092\u4FDD\u5B58")) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("p", { style: S.note }, "baskestats \u306E\u30D9\u30FC\u30B7\u30C3\u30AF\u30B9\u30B3\u30A2\u8868\u3092\u30B3\u30D4\u30FC\u3057\u3066\u8CBC\u308A\u4ED8\u3051\u3066\u304F\u3060\u3055\u3044\uFF08\u30BF\u30D6\u533A\u5207\u308A\uFF0FCSV\u3069\u3061\u3089\u3082\u53EF\uFF09\u3002"), /* @__PURE__ */ React.createElement("div", { style: S.uploadBlock }, /* @__PURE__ */ React.createElement("div", { style: S.uploadHead }, /* @__PURE__ */ React.createElement("span", { style: { color: T.us, fontWeight: 800 } }, "\u81EA\u30C1\u30FC\u30E0\u306E\u30B9\u30BF\u30C3\u30C4"), /* @__PURE__ */ React.createElement("button", { style: S.ghostBtn, onClick: () => fileRef.current?.click() }, "CSV\u3092\u9078\u629E"), /* @__PURE__ */ React.createElement("input", { ref: fileRef, type: "file", accept: ".csv,.tsv,.txt", style: { display: "none" }, onChange: (e) => e.target.files?.[0] && readFile(e.target.files[0], setOurText) })), /* @__PURE__ */ React.createElement("textarea", { value: ourText, onChange: (e) => setOurText(e.target.value), style: S.textarea, placeholder: "Name	PTS	FGA	\u2026\n\u30EA\u30E7\u30A6	17	9	\u2026" })), /* @__PURE__ */ React.createElement("div", { style: S.uploadBlock }, /* @__PURE__ */ React.createElement("div", { style: S.uploadHead }, /* @__PURE__ */ React.createElement("span", { style: { color: T.them, fontWeight: 800 } }, "\u76F8\u624B\u30C1\u30FC\u30E0\u306E\u30B9\u30BF\u30C3\u30C4"), /* @__PURE__ */ React.createElement("span", { style: { color: T.muted, fontSize: 12 } }, "\uFF08\u4EFB\u610F\uFF09"), /* @__PURE__ */ React.createElement("button", { style: S.ghostBtn, onClick: () => fileRefOpp.current?.click() }, "CSV\u3092\u9078\u629E"), /* @__PURE__ */ React.createElement("input", { ref: fileRefOpp, type: "file", accept: ".csv,.tsv,.txt", style: { display: "none" }, onChange: (e) => e.target.files?.[0] && readFile(e.target.files[0], setOppText) })), /* @__PURE__ */ React.createElement("textarea", { value: oppText, onChange: (e) => setOppText(e.target.value), style: S.textarea, placeholder: "\u76F8\u624B\u30C1\u30FC\u30E0\u306E\u30B9\u30BF\u30C3\u30C4\uFF08\u3042\u308C\u3070\uFF09" })), err && /* @__PURE__ */ React.createElement("div", { style: S.errBox }, err), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10, marginTop: 8 } }, /* @__PURE__ */ React.createElement("button", { style: S.ghostBtn, onClick: doPreview }, "\u30D7\u30EC\u30D3\u30E5\u30FC"), /* @__PURE__ */ React.createElement("button", { style: S.primaryBtn, onClick: doSave }, "\u3053\u306E\u8A66\u5408\u3092\u4FDD\u5B58")), preview && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 18 } }, /* @__PURE__ */ React.createElement("div", { style: { ...S.sectionTitle, marginTop: 0 } }, "\u30D7\u30EC\u30D3\u30E5\u30FC \u2014 \u5F97\u70B9 ", /* @__PURE__ */ React.createElement("span", { style: { color: T.us } }, computeScore(preview.ourPlayers)), preview.oppPlayers.length ? /* @__PURE__ */ React.createElement(React.Fragment, null, " - ", /* @__PURE__ */ React.createElement("span", { style: { color: T.them } }, computeScore(preview.oppPlayers))) : null), /* @__PURE__ */ React.createElement(RosterTable, { players: preview.ourPlayers, accent: T.us }))));
   }
   function Field({ label, children }) {
     return /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6 } }, /* @__PURE__ */ React.createElement("label", { style: S.pickLbl }, label), children);
