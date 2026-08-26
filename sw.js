@@ -1,7 +1,7 @@
 // バージョンを上げると、古いキャッシュが自動的に破棄され、
 // ブラウザが新しいindex.html等を取得し直します。
 // 今後アプリを更新するたびに、この数字を1つ増やしてください。
-const SW_VERSION = 2;
+const SW_VERSION = 3;
 const CACHE = `enya-stats-v${SW_VERSION}`;
 
 const PRECACHE = [
